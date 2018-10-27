@@ -1,0 +1,10 @@
+name = "MLJ"
+uuid = "d426de76-ceb5-11e8-220b-513850c5ad0c"
+authors = ["Anthony D. Blaom <anthony.blaom@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+DecisionTree = "7806a523-6efd-50cb-b5f6-3fa6f1930dbb"
+Requires = "ae029012-a4dd-5104-9daa-d747884805df"
