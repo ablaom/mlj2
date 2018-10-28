@@ -1,22 +1,42 @@
 module MLJ
 
 export glossary
-export @more, @constant
-export predict, fit, transform, inverse_transform, fit!
+export fit!
 export features, X_and_y
 export load_boston, load_ames, load_iris
 export TrainableModel, prefit, dynamic
 export partition
 
+# defined here but extended by files in "interfaces/" (lazily loaded)
+export predict, fit, transform, inverse_transform
+
+# defined in include file "show.jl":
+export @more, @constant
+
+# defined in include file "builtins/Transformers.jl":
+export ToIntTransformer
+export UnivariateStandardizer, Standardizer
+# export OneHotEncoder
+# export UnivariateBoxCoxTransformer, BoxCoxTransformer
+# export DataFrameToArrayTransformer, RegressionTargetTransformer
+# export MakeCategoricalsIntTransformer
+# export DataFrameToStandardizedArrayTransformer
+# export IntegerToInt64Transformer
+# export UnivariateDiscretizer, Discretizer
+
+
 import Requires.@require  # lazy code loading package
 import CSV
-import DataFrames: names, DataFrame, AbstractDataFrame, SubDataFrame
+import DataFrames: DataFrame, AbstractDataFrame, SubDataFrame, eltypes, names
+import Distributions
+
+# from Standard Library:
+using Statistics
+using LinearAlgebra
 
 
 # CONSTANTS
 
-const COLUMN_WIDTH = 24           # for displaying dictionaries with `show`
-const DEFAULT_SHOW_DEPTH = 2      # how deep to display fields of `MLJType` objects
 const srcdir = dirname(@__FILE__) # the directory containing this file 
 
 
@@ -67,10 +87,7 @@ such an algorithm.
 
 The "weights" or "parmaters" learned by an algorithm using the
 hyperparameters prescribed in an associated model (eg, what a learner
-needs to predict or what a transformer needs to transform). An
-estimator may have a Julia type determined by a package external to
-MLJ, but which will be declared in the MLJ interface for that package
-(important for efficient implementation of ensemble learners).
+needs to predict or what a transformer needs to transform). 
 
 
 ### method
@@ -147,21 +164,19 @@ glossary() = nothing
 # overarching MLJ type:
 abstract type MLJType end
 
-# overload `show` method for MLJType (which becomes the fallback for
-# all subtypes) and define REPL macro `@more` to extract detail, and
-# `@constant` macro for assigning to new variables in way that
-# "registers" the binding:
+# overload `show` method for MLJType (which becomes the fall-back for
+# all subtypes):
 include("show.jl")
 
-# for storing hyperparameters associated with a estimator of type `E` (see
-# above for definition of estimator):
-abstract type Model{E} <: MLJType end 
+# for storing hyperparameters:
+abstract type Model <: MLJType end 
 
-# a model type for learners:
-abstract type Learner{E} <: Model{E} end
+# a subtype for learners with an associated estimator of type
+# `E`; type parameter needed to make ensemble learners efficient:
+abstract type Learner{E} <: Model end
 
 # a model type for transformers
-abstract type Transformer{E} <: Model{E} end 
+abstract type Transformer <: Model end 
 
 # special learners:
 abstract type Supervised{E} <: Learner{E} end
@@ -183,7 +198,8 @@ abstract type Task <: MLJType end
 select(df::AbstractDataFrame, selection) = df[selection]
 (df::DataFrame)(rows) = view(df, rows)
 (df::SubDataFrame)(rows) = view(df, rows)
-(v::Vector)(rows) = v[rows]
+(v::Vector)(rows) = view(v, rows)
+(A::Matrix)(rows) = view(A, rows, :)
 #  names(t::Table) = isempty(table) ? Symbol[] : getfields(t[1])
 # (t::Table)(rows) = t[rows]
 
@@ -264,7 +280,7 @@ Append to `v1` all elements of `v2` not in `v1`, in the
 order they appear, and return result.
 
 """
-function merge!(v1::Vector, v2::Vector)
+function Base.merge!(v1::Vector, v2::Vector)
     for x in v2
         if !(x in v1)
             push!(v1, x)
@@ -289,6 +305,7 @@ mutable struct TrainableModel{B<:Model} <: MLJType
 
         trainable = new{B}(model)
         trainable.args = args
+        trainable.report = Dict{Symbol,Any}()
 
         # note: `get_tape(arg)` returns arg.tape where this makes
         # sense and an empty tape otherwise.  However, the complete
@@ -313,19 +330,23 @@ TrainableModel(model::B, args...) where B<:Model = TrainableModel{B}(model, args
 function fit!(trainable::TrainableModel, rows; verbosity=1, kwargs...)
     verbosity < 1 || @info "Training $trainable."
     if isdefined(trainable, :state)
-        trainable.estimator, trainable.state, trainable.report =
-            fit(trainable.model, trainable.args..., rows, trainable.state; verbosity=verbosity-1, kwargs...)
+        state = trainable.state
     else
-        trainable.estimator, trainable.state, trainable.report =
-            fit(trainable.model, trainable.args..., rows; verbosity=verbosity-1, kwargs...)
+        state = nothing
+    end
+    trainable.estimator, trainable.state, report =
+        fit(trainable.model, trainable.args..., rows, state, verbosity-1; kwargs...)
+    if report != nothing
+        merge!(trainable.report, report)
     end
     verbosity <1 || @info "Done."
+    return trainable
 end
 
 
 ## MODEL INTERFACE - SPECIFIC TO SUPERVISED LEARNERS
 
-# trainable model constructor for supervised models:
+# users' trainable model constructor for supervised models:
 function prefit(model::S, X=nothing, y=nothing) where S<:Supervised
     !(X == nothing || y == nothing) ||
         @warn "To make trainable instead use `prefit(model, X, y)` or later call `model.args = X, y`."
@@ -351,24 +372,24 @@ end
 
 ## MODEL INTERFACE - SPECIFIC TO TRANSFORMERS
 
-# trainable model constructor for transformers:
+# users' trainable model constructor for transformers:
 function prefit(model::T, X=nothing) where T<:Transformer
     X != nothing ||
         @warn "To make trainable instead use `prefit(model, X)` or later call `model.args = X`."
     return TrainableModel(model, X)
 end
 
-function transform(model::TrainableModel{L}, X) where L<:Learner
+function transform(model::TrainableModel{T}, X) where T<:Transformer
     if isdefined(model, :estimator)
-        return transform(model.model, X)
+        return transform(model.model, model.estimator, X)
     else
         throw(error("$model is not trained and so cannot transform."))
     end
 end
 
-function inverse_transform(model::TrainableModel{L}, X) where L<:Learner
+function inverse_transform(model::TrainableModel{T}, X) where T<:Transformer
     if isdefined(model, :estimator)
-        return inverse_transform(model.model, X)
+        return inverse_transform(model.model, model.estimator, X)
     else
         throw(error("$model is not trained and so cannot inverse_transform."))
     end
@@ -404,6 +425,7 @@ struct DynamicData{M<:Union{TrainableModel, Nothing}} <: MLJType
     end
 end
 
+
 # to complete the definition of `TrainableModel` and `DynamicData`
 # constructors:
 get_tape(::Any) = TrainableModel[]
@@ -413,8 +435,6 @@ get_tape(trainable::TrainableModel) = trainable.tape
 # autodetect type parameter:
 DynamicData(operator, trainable::M, args...) where M<:Union{TrainableModel, Nothing} =
     DynamicData{M}(operator, trainable, args...)
-
-# to make dispatch unambiguous in "dynamic" constructors appearing later:
 
 # user's fall-back constructor:
 dynamic(operator::Function, trainable::TrainableModel, args...) = DynamicData(operator, trainable, args...)
@@ -442,7 +462,16 @@ end
 (X::DynamicData{Nothing})(rows) =
     (X.operator)([X.args[j](rows) for j in eachindex(X.args)]...)
 
+# fit method:
+function fit!(X::DynamicData, rows; verbosity=1, kwargs...)
+    for trainable in X.tape[1:end-1]
+        fit!(trainable, rows; verbosity=verbosity)
+    end
+    fit!(X.tape[end], rows; verbosity=verbosity, kwargs...)
+    return X
+end
 
+    
 ## MISCELLANEOUS TOOLS
 
 """
@@ -478,6 +507,12 @@ function partition(rows::AbstractVector{Int}, fractions...)
     push!(rowss, rows[first:n_patterns])
     return tuple(rowss...)
 end
+
+
+## LOAD BUILT-IN MODELS
+
+include("builtins/Transformers.jl")
+#include("builtins/KNN.jl")
 
 
 ## SETUP LAZY PKG INTERFACE LOADING

@@ -1,3 +1,5 @@
+# this file defines *and* loads one module
+
 #> This interface for the DecisionTree package is annotated so that it
 #> may serve as a template for other supervised learning
 #> interfaces. The annotations, which begin with "#>", should be
@@ -5,17 +7,18 @@
 
 #> TODO: checklist, incl, "registering" interface with MLJ
 
-#> presently module name should be package name with trailing underscore "_":
+#> presently module name should be the package name with trailing underscore "_". 
 module DecisionTree_
 
-#> nothing explicitly exported
+#> export the new models you're going to define:
+export DecisionTreeClassifier
 
 # to be extended:
-import MLJ: predict, fit, clean! #> compulsory
-import MLJ: predict_proba        #> if implemented below
+import MLJ: predict, fit, clean!   #> compulsory
+# import MLJ: predict_proba        #> if implemented
 
 # needed:
-import DecisionTree                  #> import package
+import DecisionTree                #> import package
 import MLJ: Classifier, Regressor  #> and supertypes for the models to be defined
 
 
@@ -85,12 +88,12 @@ end
 
 #> a `fit` method returns (estimator, state, report)
 function fit(learner::DecisionTreeClassifier{T2}
-             , X::Matrix{Float64}        #> here choose type as required by package 
-             , y::Vector{T}              #> here choose type as required by package
+             , X::Union{Array{Float64,2},SubArray{Float64,2}} # become regular arrays when called with rows
+             , y::Union{Array{T,1},SubArray{T,1}}              
              , rows::AbstractVector{Int} #> which rows of X and y will be used
-             , state=nothing             #> pkg-specific features require state
-             ; verbosity::Int=0  #> must be here even if unsupported in pkg (as here)
-             , display_tree=true #> remaining kwargs accesss pkg-specific features
+             , state                     #> pkg-specific features require state
+             , verbosity         #> must be here even if unsupported in pkg (as here)
+             ; display_tree=true #> kwargs accesss pkg-specific features
              , display_depth=5
              , prune_only=false
              , merge_purity_threshold=0.9) where {T, T2}
@@ -99,10 +102,19 @@ function fit(learner::DecisionTreeClassifier{T2}
                                     "with type, $T2, of $learner."))
 
     if prune_only
-        state != nothing || throw(error("Cannot prune before training."))
+        state != nothing || throw(error("Cannot prune without state."))
         estimator = DecisionTree.prune_tree(state, merge_purity_threshold)
-        report = "Tree pruned with merge_purity_threshold=$merge_purity_threshold."
-        return estimator, estimator, report
+
+        #> return output of package-specific functionality (eg,
+        #> feature rankings, internal estimates of generalization error)
+        #> in `report`, which should be `nothing` or a dictionary
+        #> keyed on symbols:
+        report = Dict{Symbol,Any}()
+        report[:last_prune] = "Tree last pruned with merge_purity_threshold=$merge_purity_threshold."
+
+        state = estimator
+
+        return estimator, state, report
     end
 
     #> would have passed verbosity level below had it been supported.
@@ -124,22 +136,19 @@ function fit(learner::DecisionTreeClassifier{T2}
 
     state = estimator
 
-    #> return output of any package-specific functionality (eg,
-    #> feature rankings, internal estimates of generalization error)
-    #> in `report`, which could be anything but probably a dictionary
-    #> keyed on symbols, or `nothing`.
-    return estimator, state, nothing # estimator, state, report 
+    report = nothing
+    
+    return estimator, state, report 
 end
 
 predict(learner::DecisionTreeClassifier 
         , estimator
-        , Xnew::Matrix{Float64}) = DecisionTree.apply_tree(estimator, Xnew)
+        , Xnew::Union{Array{Float64,2},SubArray{Float64,2}}) = DecisionTree.apply_tree(estimator, collect(Xnew))
+
 
 end # module
 
-
 # expose the interface:
-#> import/export only new model types:
-import .DecisionTree_: DecisionTreeClassifier
+using .DecisionTree_
 export DecisionTreeClassifier         
 
