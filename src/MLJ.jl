@@ -1,14 +1,16 @@
 module MLJ
 
 export glossary
-export fit!
 export features, X_and_y
-export load_boston, load_ames, load_iris
-export TrainableModel, prefit, dynamic
-export partition
+export rms, rmsl, rmslp1, rmsp
+export load_boston, load_ames, load_iris, datanow
+export TrainableModel, prefit, dynamic, fit!
 
 # defined here but extended by files in "interfaces/" (lazily loaded)
 export predict, fit, transform, inverse_transform
+
+# defined in include file "utilities.jl":
+export partition, @curve, @pcurve # and @colon
 
 # defined in include file "show.jl":
 export @more, @constant
@@ -24,6 +26,8 @@ export UnivariateStandardizer, Standardizer
 # export IntegerToInt64Transformer
 # export UnivariateDiscretizer, Discretizer
 
+# defined in include file "builtins/KNN.jl":
+export KNNRegressor
 
 import Requires.@require  # lazy code loading package
 import CSV
@@ -158,6 +162,9 @@ static. Something like a scikit-learn pipeline.
 """
 glossary() = nothing
 
+include("utilities.jl")
+
+
 
 ## ABSTRACT TYPES
 
@@ -188,6 +195,104 @@ abstract type Classifier{E} <: Supervised{E} end
 
 # tasks:
 abstract type Task <: MLJType end 
+
+
+## LOSS AND LOW-LEVEL ERROR FUNCTIONS
+
+function rms(y, yhat, rows)
+    length(y) == length(yhat) || throw(DimensionMismatch())
+    ret = 0.0
+    for i in rows
+        dev = y[i] - yhat[i]
+        ret += dev*dev
+    end
+    return sqrt(ret/length(rows))
+end
+
+function rms(y, yhat)
+    length(y) == length(yhat) || throw(DimensionMismatch())
+    ret = 0.0
+    for i in eachindex(y)
+        dev = y[i] - yhat[i]
+        ret += dev*dev
+    end
+    return sqrt(ret/length(y))
+end
+
+function rmsl(y, yhat, rows)
+    length(y) == length(yhat) || throw(DimensionMismatch())
+    ret = 0.0
+    for i in rows
+        dev = log(y[i]) - log(yhat[i])
+        ret += dev*dev
+    end
+    return sqrt(ret/length(rows))
+end
+
+function rmsl(y, yhat)
+    length(y) == length(yhat) || throw(DimensionMismatch())
+    ret = 0.0
+    for i in eachindex(y)
+        dev = log(y[i]) - log(yhat[i])
+        ret += dev*dev
+    end
+    return sqrt(ret/length(y))
+end
+
+function rmslp1(y, yhat, rows)
+    length(y) == length(yhat) || throw(DimensionMismatch())
+    ret = 0.0
+    for i in rows
+        dev = log(y[i] + 1) - log(yhat[i] + 1)
+        ret += dev*dev
+    end
+    return sqrt(ret/length(rows))
+end
+
+function rmslp1(y, yhat)
+    length(y) == length(yhat) || throw(DimensionMismatch())
+    ret = 0.0
+    for i in eachindex(y)
+        dev = log(y[i] + 1) - log(yhat[i] + 1)
+        ret += dev*dev
+    end
+    return sqrt(ret/length(y))
+end
+
+""" Root mean squared percentage loss """
+function rmsp(y, yhat, rows)
+    length(y) == length(yhat) || throw(DimensionMismatch())
+    ret = 0.0
+    count = 0
+    for i in rows
+        if y[i] != 0.0
+            dev = (y[i] - yhat[i])/y[i]
+            ret += dev*dev
+            count += 1
+        end
+    end
+    return sqrt(ret/count)
+end
+
+function rmsp(y, yhat)
+    length(y) == length(yhat) || throw(DimensionMismatch())
+    ret = 0.0
+    count = 0
+    for i in eachindex(y)
+        if y[i] != 0.0
+            dev = (y[i] - yhat[i])/y[i]
+            ret += dev*dev
+            count += 1
+        end
+    end
+    return sqrt(ret/count)
+end
+
+# function auc(truelabel::L) where L
+#     _auc(y::AbstractVector{L}, yhat::AbstractVector{T}) where T<:Real = 
+#         ROC.AUC(ROC.roc(yhat, y, truelabel))
+#     return _auc
+# end
 
 
 ## METHODS TO CLOSE GAP BETWEEN `Array`s, `DataFrame`s AND JuliaDB `Table`s
@@ -425,7 +530,6 @@ struct DynamicData{M<:Union{TrainableModel, Nothing}} <: MLJType
     end
 end
 
-
 # to complete the definition of `TrainableModel` and `DynamicData`
 # constructors:
 get_tape(::Any) = TrainableModel[]
@@ -472,47 +576,14 @@ function fit!(X::DynamicData, rows; verbosity=1, kwargs...)
 end
 
     
-## MISCELLANEOUS TOOLS
+## SYNTACTIC SUGAR FOR DYNAMIC DATA (PIPELINING)
 
-"""
-    partition(rows::AbstractVector{Int}, fractions...)
-
-Splits the vector `rows` into a tuple of vectors whose lengths are
-given by the corresponding `fractions` of `length(rows)`. The last
-fraction is not provided, as it is inferred from the preceding
-ones. So, for example,
-
-    julia> partition(1:1000, 0.2, 0.7)
-    (1:200, 201:900, 901:1000)
-
-"""
-function partition(rows::AbstractVector{Int}, fractions...)
-    rows = collect(rows)
-    rowss = []
-    if sum(fractions) >= 1
-        throw(DomainError)
-    end
-    n_patterns = length(rows)
-    first = 1
-    for p in fractions
-        n = round(Int, p*n_patterns)
-        n == 0 ? (@warn "A split has only one element"; n = 1) : nothing
-        push!(rowss, rows[first:(first + n - 1)])
-        first = first + n
-    end
-    if first > n_patterns
-        @warn "Last vector in the split has only one element."
-        first = n_patterns
-    end
-    push!(rowss, rows[first:n_patterns])
-    return tuple(rowss...)
-end
 
 
 ## LOAD BUILT-IN MODELS
 
 include("builtins/Transformers.jl")
-#include("builtins/KNN.jl")
+include("builtins/KNN.jl")
 
 
 ## SETUP LAZY PKG INTERFACE LOADING

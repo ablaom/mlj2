@@ -20,3 +20,6 @@ function load_iris()
                   categorical=false, allowmissing=:none)
     return ClassificationTask(data=df, target=:target)
 end
+
+"""Get some supervised data now!!"""
+datanow() = X_and_y(load_boston())

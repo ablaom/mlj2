@@ -8,10 +8,6 @@ const DEFAULT_SHOW_DEPTH = 2      # how deep to display fields of `MLJType` obje
 
 const handle_given_id = Dict{UInt64,Symbol}()
 
-macro colon(p)
-    Expr(:quote, p)
-end
-
 """
     @constant x = value
 

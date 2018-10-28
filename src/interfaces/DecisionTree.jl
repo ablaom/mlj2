@@ -148,7 +148,9 @@ predict(learner::DecisionTreeClassifier
 
 end # module
 
-# expose the interface:
+
+## EXPOSE THE INTERFACE
+
 using .DecisionTree_
 export DecisionTreeClassifier         
 
