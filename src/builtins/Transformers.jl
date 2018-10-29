@@ -43,13 +43,12 @@ ToIntEstimator(S::Type{T}) where T =
 
 function fit(transformer::ToIntTransformer
              , v::AbstractVector{T}
-             , rows::AbstractVector{Int}
              , state
              , verbosity) where T
 
     int_given_T = Dict{T, Int}()
     T_given_int = Dict{Int, T}()
-    vals = collect(Set(v[rows])) 
+    vals = collect(Set(v)) 
     if transformer.sorted
         sort!(vals)
     end
@@ -67,7 +66,8 @@ function fit(transformer::ToIntTransformer
 
     estimator = ToIntEstimator{T}(n_levels, int_given_T, T_given_int)
     state = estimator
-    report = nothing
+    report = Dict{Symbol,Any}()
+    report[:values] = vals
 
     return estimator, state, report
 
@@ -105,11 +105,11 @@ inverse_transform(transformer::ToIntTransformer, estimator::ToIntEstimator{T},
 
 struct UnivariateStandardizer <: Transformer end
 
-function fit(transformer::UnivariateStandardizer, v::AbstractVector{T}, rows,
+function fit(transformer::UnivariateStandardizer, v::AbstractVector{T}, 
              state, verbosity) where T <: Real
     std(v) > eps(Float64) || 
         @warn "Extremely small standard deviation encountered in standardization."
-    estimator = (mean(v[rows]), std(v[rows]))
+    estimator = (mean(v), std(v))
     state = estimator
     report = nothing
     return estimator, state, report
@@ -123,7 +123,7 @@ end
 
 # for transforming vector:
 transform(transformer::UnivariateStandardizer, estimator,
-          v::AbstractVector{T}) where T <: Real =
+          v) =
               [transform(transformer, estimator, x) for x in v]
 
 # for single values:
@@ -133,9 +133,8 @@ function inverse_transform(transformer::UnivariateStandardizer, estimator, y::Re
 end
 
 # for vectors:
-inverse_transform(transformer::UnivariateStandardizer, estimator,
-                  w::AbstractVector{T}) where T <: Real =
-                      [inverse_transform(transformer, estimator, y) for y in w]
+inverse_transform(transformer::UnivariateStandardizer, estimator, w) =
+    [inverse_transform(transformer, estimator, y) for y in w]
 
 
 ## STANDARDIZATION OF ORDINAL FEATURES OF A DATAFRAME
@@ -161,16 +160,15 @@ end
 # null estimator:
 StandardizerEstimator() = StandardizerEstimator(zeros(0,0), Symbol[], Bool[])
 
-function fit(transformer::Standardizer, X::AbstractDataFrame, rows, state, verbosity)
+function fit(transformer::Standardizer, X, state, verbosity)
 
-    Xv = view(X, rows)
-    features = names(Xv)
+    features = names(X)
     
     # determine indices of features to be transformed
     features_to_try = (isempty(transformer.features) ? features : transformer.features)
-    is_transformed = Array{Bool}(undef, size(Xv, 2))
-    for j in 1:size(Xv, 2)
-        if features[j] in features_to_try && eltype(Xv[j]) <: AbstractFloat
+    is_transformed = Array{Bool}(undef, size(X, 2))
+    for j in 1:size(X, 2)
+        if features[j] in features_to_try && eltype(X[j]) <: AbstractFloat
             is_transformed[j] = true
         else
             is_transformed[j] = false
@@ -178,13 +176,12 @@ function fit(transformer::Standardizer, X::AbstractDataFrame, rows, state, verbo
     end
 
     # fit each of those features
-    estimators = Array{Float64}(undef, 2, size(Xv, 2))
+    estimators = Array{Float64}(undef, 2, size(X, 2))
     verbosity < 1 || @info "Features standarized: "
-    n_rows = size(Xv, 1)
-    for j in 1:size(Xv, 2)
+    for j in 1:size(X, 2)
         if is_transformed[j]
             estimator, state, report =
-                fit(UnivariateStandardizer(), collect(Xv[j]), 1:n_rows, nothing, verbosity - 1)
+                fit(UnivariateStandardizer(), collect(X[j]), nothing, verbosity - 1)
             estimators[:,j] = [estimator...]
             verbosity < 1 ||
                 @info "  :$(features[j])    mu=$(estimators[1,j])  sigma=$(estimators[2,j])"

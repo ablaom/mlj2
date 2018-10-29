@@ -88,9 +88,8 @@ end
 
 #> a `fit` method returns (estimator, state, report)
 function fit(learner::DecisionTreeClassifier{T2}
-             , X::Union{Array{Float64,2},SubArray{Float64,2}} # become regular arrays when called with rows
-             , y::Union{Array{T,1},SubArray{T,1}}              
-             , rows::AbstractVector{Int} #> which rows of X and y will be used
+             , X::Array{Float64,2}
+             , y::Vector{T}
              , state                     #> pkg-specific features require state
              , verbosity         #> must be here even if unsupported in pkg (as here)
              ; display_tree=true #> kwargs accesss pkg-specific features
@@ -119,13 +118,9 @@ function fit(learner::DecisionTreeClassifier{T2}
 
     #> would have passed verbosity level below had it been supported.
     #> supported.
-    #>
-    #> if Decision tree had supported AbstractArray, we
-    #> would have instead passed `view(y, rows)` and `view(X, rows)`
-    #> to avoid making copies of the data here.
     estimator = DecisionTree.build_tree(
-        y[rows]
-        , X[rows,:]
+        y
+        , X
         , learner.n_subfeatures
         , learner.max_depth
         , learner.min_samples_leaf

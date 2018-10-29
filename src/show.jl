@@ -184,16 +184,16 @@ function _recursive_show(stream::IO, object::MLJType, current_depth, depth)
     if depth == 0 || isempty(fieldnames(typeof(object)))
         println(stream, object)
     elseif current_depth <= depth 
-        names = fieldnames(typeof(object))
+        fields = fieldnames(typeof(object))
         print(stream, "#"^current_depth, " ")
         show(stream, object)
         println(stream, ": ")
 #        println(stream)
-        if isempty(names)
+        if isempty(fields)
             println(stream)
             return
         end
-        for fld in names
+        for fld in fields
             fld_string = string(fld)*" "^(max(0,COLUMN_WIDTH - length(string(fld))))*"=>   "
             print(stream, fld_string)
             if isdefined(object, fld)
@@ -205,7 +205,7 @@ function _recursive_show(stream::IO, object::MLJType, current_depth, depth)
             end
         end
         println(stream)
-        for fld in names
+        for fld in fields
             if isdefined(object, fld)
                 subobject = getfield(object, fld)
                 if isa(subobject, MLJType) && !isempty(fieldnames(typeof(subobject)))

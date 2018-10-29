@@ -5,6 +5,7 @@ export features, X_and_y
 export rms, rmsl, rmslp1, rmsp
 export load_boston, load_ames, load_iris, datanow
 export TrainableModel, prefit, dynamic, fit!
+export array
 
 # defined here but extended by files in "interfaces/" (lazily loaded)
 export predict, fit, transform, inverse_transform
@@ -303,8 +304,8 @@ end
 select(df::AbstractDataFrame, selection) = df[selection]
 (df::DataFrame)(rows) = view(df, rows)
 (df::SubDataFrame)(rows) = view(df, rows)
-(v::Vector)(rows) = view(v, rows)
-(A::Matrix)(rows) = view(A, rows, :)
+(v::Vector)(rows) = v[rows]      # TODO might later try to return views but require extra complexity
+(A::Matrix)(rows) = A[rows, :]
 #  names(t::Table) = isempty(table) ? Symbol[] : getfields(t[1])
 # (t::Table)(rows) = t[rows]
 
@@ -439,8 +440,9 @@ function fit!(trainable::TrainableModel, rows; verbosity=1, kwargs...)
     else
         state = nothing
     end
+    args = (arg(rows) for arg in trainable.args)
     trainable.estimator, trainable.state, report =
-        fit(trainable.model, trainable.args..., rows, state, verbosity-1; kwargs...)
+        fit(trainable.model, args..., state, verbosity-1; kwargs...)
     if report != nothing
         merge!(trainable.report, report)
     end
@@ -459,11 +461,11 @@ function prefit(model::S, X=nothing, y=nothing) where S<:Supervised
 end
 
 # predict method for learner models:
-function predict(model::TrainableModel{L}, X) where L<:Learner
+function predict(model::TrainableModel{L}, X) where L<: Learner 
     if isdefined(model, :estimator)
         return predict(model.model, model.estimator, X)
     else
-        throw(error("$model is not trained and so cannot predict."))
+        throw(error("$model is not trained and so cannot predict. Perhaps you meant to pass dynamic data?"))
     end
 end
 
@@ -488,7 +490,7 @@ function transform(model::TrainableModel{T}, X) where T<:Transformer
     if isdefined(model, :estimator)
         return transform(model.model, model.estimator, X)
     else
-        throw(error("$model is not trained and so cannot transform."))
+        throw(error("$model is not trained and so cannot transform. Perhaps you meant to pass dynamic data?"))
     end
 end
 
@@ -496,7 +498,7 @@ function inverse_transform(model::TrainableModel{T}, X) where T<:Transformer
     if isdefined(model, :estimator)
         return inverse_transform(model.model, model.estimator, X)
     else
-        throw(error("$model is not trained and so cannot inverse_transform."))
+        throw(error("$model is not trained and so cannot inverse_transform.  Perhaps you meant to pass dynamic data?"))
     end
 end
 
@@ -566,7 +568,7 @@ end
 (X::DynamicData{Nothing})(rows) =
     (X.operator)([X.args[j](rows) for j in eachindex(X.args)]...)
 
-# fit method:
+# the "fit through" method:
 function fit!(X::DynamicData, rows; verbosity=1, kwargs...)
     for trainable in X.tape[1:end-1]
         fit!(trainable, rows; verbosity=verbosity)
@@ -577,7 +579,27 @@ end
 
     
 ## SYNTACTIC SUGAR FOR DYNAMIC DATA (PIPELINING)
+    
+dynamic(X) = dynamic(identity, X)  
 
+predict(model::TrainableModel{L}, X::DynamicData) where L<:Learner =
+    dynamic(predict, model, X)
+transform(model::TrainableModel{T}, X::DynamicData) where T<:Transformer =
+    dynamic(transform, model, X)
+inverse_transform(model::TrainableModel{T}, X::DynamicData) where T<:Transformer =
+    dynamic(inverse_transform, model, X)
+
+array(X) = convert(Array, X)
+array(X::DynamicData) = dynamic(array, X)
+
+rms(y::DynamicData, yhat::DynamicData) = dynamic(rms, y, yhat)
+rms(y, yhat::DynamicData) = dynamic(rms, y, yhat)
+rms(y::DynamicData, yhat) = dynamic(rms, y, yhat)
+
+import Base.+
++(y1::DynamicData, y2::DynamicData) = dynamic(+, y1, y2)
++(y1, y2::DynamicData) = dynamic(+, y1, y2)
++(y1::DynamicData, y2) = dynamic(+, y1, y2)
 
 
 ## LOAD BUILT-IN MODELS

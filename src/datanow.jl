@@ -22,4 +22,6 @@ function load_iris()
 end
 
 """Get some supervised data now!!"""
-datanow() = X_and_y(load_boston())
+datanow() =  X_and_y(load_boston())
+
+

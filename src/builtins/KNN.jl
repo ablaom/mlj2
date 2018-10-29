@@ -42,14 +42,13 @@ function clean!(model::KNNRegressor)
 end
 
 function fit(model::KNNRegressor
-             , X::AbstractArray{Float64,2}
-             , y::AbstractVector{Float64}
-             , rows::AbstractVector{Int} 
+             , X::Matrix{Float64}
+             , y::Vector{Float64}
              , state                     
              , verbosity) 
     
     # computing norms of rows later on is faster if we use the transpose of X:
-    estimator = (X'[:, rows], y[rows])
+    estimator = (X', y)
     state = estimator
     report = nothing
     
