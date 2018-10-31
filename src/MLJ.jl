@@ -580,7 +580,8 @@ end
     
 ## SYNTACTIC SUGAR FOR DYNAMIC DATA (PIPELINING)
     
-dynamic(X) = dynamic(identity, X)  
+dynamic(X) = dynamic(identity, X)
+dynamic(X::DynamicData) = X 
 
 predict(model::TrainableModel{L}, X::DynamicData) where L<:Learner =
     dynamic(predict, model, X)
