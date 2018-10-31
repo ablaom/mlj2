@@ -5,6 +5,7 @@ export features, X_and_y
 export rms, rmsl, rmslp1, rmsp
 export load_boston, load_ames, load_iris, datanow
 export TrainableModel, prefit, dynamic, fit!
+export freeze!, thaw!
 export array
 
 # defined here but extended by files in "interfaces/" (lazily loaded)
@@ -357,6 +358,9 @@ include("datanow.jl")
 
 ## PACKAGE INTERFACE METHODS 
 
+freeze!(model::Model) = (model.frozen = true; model)
+thaw!(model::Model) = (model.frozen = false; model)
+
 # to be extended by interfaces:
 function fit end
 function predict end
@@ -440,19 +444,29 @@ TrainableModel(model::B, args...) where B<:Model = TrainableModel{B}(model, args
 
 # fit method:
 function fit!(trainable::TrainableModel, rows; verbosity=1, kwargs...)
-    verbosity < 1 || @info "Training $trainable."
+
+    if trainable.model.frozen && verbosity > -1
+        @warn "$trainable not trained. Model $(trainable.model) is frozen."
+        return trainable
+    end
+        
+    verbosity < 1 || @info "Training $trainable whose model is $(trainable.model)"
     if isdefined(trainable, :state)
         state = trainable.state
     else
         state = nothing
     end
+
     args = (arg(rows) for arg in trainable.args)
     trainable.estimator, trainable.state, report =
         fit(trainable.model, args..., state, verbosity-1; kwargs...)
+
     if report != nothing
         merge!(trainable.report, report)
     end
+
     verbosity <1 || @info "Done."
+
     return trainable
 end
 

@@ -29,7 +29,7 @@ end
 
 ToIntTransformer(; sorted=true, initial_label=1
                  , map_unseen_to_minus_one=false
-                 , frozen = true) =
+                 , frozen=false) =
                      ToIntTransformer(sorted, initial_label,
                                       map_unseen_to_minus_one, frozen)
 
