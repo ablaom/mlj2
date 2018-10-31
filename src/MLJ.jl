@@ -3,7 +3,6 @@ module MLJ
 export glossary
 export features, X_and_y
 export rms, rmsl, rmslp1, rmsp
-export load_boston, load_ames, load_iris, datanow
 export TrainableModel, prefit, dynamic, fit!
 export freeze!, thaw!
 export array
@@ -11,15 +10,15 @@ export array
 # defined here but extended by files in "interfaces/" (lazily loaded)
 export predict, fit, transform, inverse_transform
 
-# defined in include file "utilities.jl":
-export partition, @curve, @pcurve # and @colon
-
-# defined in include file "show.jl":
-export @more, @constant
+# defined in include files:
+export partition, @curve, @pcurve                  # "utilities.jl"
+export @more, @constant                            # "show.jl"
+export load_boston, load_ames, load_iris, datanow  # "datasets.jl"
+export KNNRegressor                                # "builtins/KNN.jl":
 
 # defined in include file "builtins/Transformers.jl":
-export ToIntTransformer
-export UnivariateStandardizer, Standardizer
+export ToIntTransformer                     
+export UnivariateStandardizer, Standardizer 
 # export OneHotEncoder
 # export UnivariateBoxCoxTransformer, BoxCoxTransformer
 # export DataFrameToArrayTransformer, RegressionTargetTransformer
@@ -28,8 +27,6 @@ export UnivariateStandardizer, Standardizer
 # export IntegerToInt64Transformer
 # export UnivariateDiscretizer, Discretizer
 
-# defined in include file "builtins/KNN.jl":
-export KNNRegressor
 
 import Requires.@require  # lazy code loading package
 import CSV
@@ -91,7 +88,7 @@ such an algorithm.
 
 ### estimator 
 
-The "weights" or "parmaters" learned by an algorithm using the
+The "weights" or "paramaters" learned by an algorithm using the
 hyperparameters prescribed in an associated model (eg, what a learner
 needs to predict or what a transformer needs to transform). 
 
@@ -116,12 +113,12 @@ is *dynamic*.
 ### state (type not presently constrained)
 
 A product of training that is sufficient to perform any implemented
-learner/transformer-specific functions beyond normal training,
-transforming, or predicting (eg, pruning an existing decision tree,
-optimization weights of an ensemble learner). In particular, in the
-case of iterative learners, state must be sufficient to restart the
-training algorithm (eg, add decision trees to a random forest). The
-estimator may serve as state and should do so by default.
+learner/transformer-specific functions beyond normal training (eg,
+pruning an existing decision tree, optimization weights of an ensemble
+learner). In particular, in the case of iterative learners, state must
+be sufficient to restart the training algorithm (eg, add decision
+trees to a random forest). The estimator may serve as state and should
+do so by default.
 
 
 ### trainable model
@@ -180,16 +177,14 @@ include("show.jl")
 # for storing hyperparameters:
 abstract type Model <: MLJType end 
 
-# a subtype for learners with an associated estimator of type
-# `E`; type parameter needed to make ensemble learners efficient:
-abstract type Learner{E} <: Model end
+abstract type Learner <: Model end
 
 # a model type for transformers
 abstract type Transformer <: Model end 
 
 # special learners:
-abstract type Supervised{E} <: Learner{E} end
-abstract type Unsupervised{E} <: Learner{E} end
+abstract type Supervised{E} <: Learner end # parameterized by estimator `E`
+abstract type Unsupervised{E} <: Learner end
 
 # special supervised learners:
 abstract type Regressor{E} <: Supervised{E} end
@@ -352,8 +347,7 @@ X_and_y(task::SupervisedTask) = select(task.data, features(task)), select(task.d
 
 ## SOME LOCALLY ARCHIVED TASKS FOR TESTING AND DEMONSTRATION
 
-# define `load_ames()`, `load_boston()` and `load_iris()`:
-include("datanow.jl")
+include("datasets.jl")
 
 
 ## PACKAGE INTERFACE METHODS 

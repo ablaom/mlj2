@@ -76,4 +76,3 @@ er2 = er(fold1)
 
 er = (er1 + er2)/2
 
-

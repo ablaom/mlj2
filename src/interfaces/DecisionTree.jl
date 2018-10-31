@@ -94,7 +94,7 @@ end
 function fit(learner::DecisionTreeClassifier{T2}
              , X::Array{Float64,2}
              , y::Vector{T}
-             , state                     #> pkg-specific features require state
+             , state             #> pkg-specific features require state
              , verbosity         #> must be here even if unsupported in pkg (as here)
              ; display_tree=true #> kwargs accesss pkg-specific features
              , display_depth=5
