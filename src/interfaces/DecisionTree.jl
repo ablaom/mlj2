@@ -40,6 +40,8 @@ mutable struct DecisionTreeClassifier{T} <: Classifier{DecisionTreeClassifierEst
     min_samples_split::Int
     min_purity_increase::Float64
     n_subfeatures::Float64
+    frozen::Bool   #> every model must have this field; for
+                     #> suppressing training in learning networks
 end
 
 # constructor:
@@ -52,7 +54,8 @@ function DecisionTreeClassifier(
     , min_samples_leaf=1
     , min_samples_split=2
     , min_purity_increase=0.0
-    , n_subfeatures=0)
+    , n_subfeatures=0
+    , frozen=false)
 
     !(target_type == nothing) || throw(error("You must specify target_type=..."))
 
@@ -62,7 +65,8 @@ function DecisionTreeClassifier(
         , min_samples_leaf
         , min_samples_split
         , min_purity_increase
-        , n_subfeatures)
+        , n_subfeatures
+        , frozen)
 
     message = clean!(learner)         #> future proof by including these 
     isempty(message) || @warn message #> two lines even if no clean! defined below
