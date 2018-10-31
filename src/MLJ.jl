@@ -380,19 +380,25 @@ clean!(estimator::Model) = ""
 ## MODEL INTERFACE - BARE BONES
 
 """ 
-    merge!(v1::Vector, v2::Vector)
+    merge!(tape1, tape2)
 
-Append to `v1` all elements of `v2` not in `v1`, in the
-order they appear, and return result.
+Assumes each argument has a field called `model` of type
+`Model`. Incrementally appends to `tape1` all elements in `tape2`,
+excluding any element whose associated model is the model of a
+previously added element, or an element of `tape1` in its initial
+state.
 
 """
-function Base.merge!(v1::Vector, v2::Vector)
-    for x in v2
-        if !(x in v1)
-            push!(v1, x)
+function Base.merge!(tape1, tape2)
+    models = Model[trainable.model for trainable in tape1]
+    for trainable in tape2
+        model = trainable.model
+        if !(model in models)
+            push!(tape1, trainable)
+            push!(models, model)
         end
     end
-    return v1
+    return tape1
 end
 
 # TODO: replace linear tapes below with dependency trees to allow

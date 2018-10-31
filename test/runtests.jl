@@ -25,7 +25,7 @@ yhat = (1 + 8/sqrt(5) + 2/sqrt(10))/r
 @test isapprox(predict(knn_, estimator, Xtest)[1], yhat)
 
 
-## MODEL INTERFACE
+## TRAINABLE MODEL INTERFACE
 
 X_frame, y = datanow(); # boston data
 X = array(X_frame)
