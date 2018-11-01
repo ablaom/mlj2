@@ -14,10 +14,10 @@ in the output of `show`.
 ### The model interface
 
 A *model* is an object storing hyperparameters associated with some
-machine learning algorithm, these understood in the broadest sense.
-The name of the Julia type associated with a model indicates the
-associated algorithm (e.g., `DecisionTreeClassifier`). The ultimate
-supertype of all models is:
+machine learning algorithm, where "learning algorithm" is to be
+broadly interpreted.  The name of the Julia type associated with a
+model indicates the associated algorithm (e.g.,
+`DecisionTreeClassifier`). The ultimate supertype of all models is:
 
 ````julia
 abstract type Model <: MLJType end 
@@ -28,8 +28,9 @@ making "predictions", called *learners* (e.g., the CART decision tree
 algorithm) and those intended for "transforming" data (based on
 previously seen data), called *transformers* (e.g., the PCA
 feature-reduction algorithm).  Generally, only transformers convert
-data in two directions (can *inverse* transform) but the distinction
-might otherwise be semantic. We use the same words,
+data in two directions (can *inverse* transform) and only supervised
+learners have more input variables for training than for prediction
+(but the distinction might otherwise be vague). We use the same words,
 *learner* and *transformer*, for the *models* associated with these
 algorithms.
 
@@ -71,12 +72,17 @@ end
 
 ````
 
-Models should never have internally defined constructors but should
-always be given a lazy keyword constructors that define default
-values. See "src/interfaces/DecisionTree.jl" for a template. That
-the field values (hyperparameters) of a model are valid values is checked by
-training methods using an optional `clean!` method (see below).
+Models (which are mutable) should never have internally defined
+constructors but should always be given an external lazy keyword
+constructor of the same name that defines default values. See
+"src/interfaces/DecisionTree.jl" for a template. Checking correcting
+for the validity of field values (hyperparameters) is performed by an
+optional `clean!` method (see below).
 
+The last field `frozen` is a compulsory field that is not actually a
+hyperparameter, but it is needed to flag models that should not be
+retrained in learning networks constructed at a higher level of the
+interface. It's default value should be `false`.
 
 ### Supervised models
 
