@@ -2,6 +2,22 @@ using Revise
 using Test
 using MLJ
 
+## DATA ADAPTOR
+
+import DataFrames: DataFrame, names
+
+df = DataFrame(x=[1,2,3], y=["a", "b", "c"])
+@test df[Rows, 2:3] == DataFrame(x=[2,3], y=["b", "c"])
+@test df[Cols, 2] == ["a", "b", "c"]
+@test df[Names] == [:x, :y]
+
+A = [1 2; 3 4; 5 6]
+@test A[Cols, 2] == [2; 4; 6]
+@test A[Rows, 2:3] == [3 4; 5 6]
+
+v = [1,2,3,4]
+@test v[Rows, 2:3] == [2, 3]
+
 @constant junk=KNNRegressor()
 
 # we first test KNN as it will be used to check other functinality:
@@ -38,7 +54,7 @@ train, valid, test = partition(allrows, 0.7, 0.15)
 @test vcat(train, valid, test) == allrows
 knn = prefit(knn_, X, y)
 fit!(knn, train);
-er = rms(predict(knn, X(test)), y(test))
+er = rms(predict(knn, X[Rows, test]), y[test])
 
 # TODO: compare to constant regressor and check it's significantly better
 
@@ -80,10 +96,10 @@ er = rms(y, yhat)
 # Now `er` is dynamic, so we can do "look through training" on any rows
 # we like and evaluate on any rows:
 fit!(er, fold1)
-er(fold2)
+er[Rows, fold2]
 
 fit!(er, fold2)
-er(fold1)
+er[Rows, fold1]
 
 include("Transformer.jl")
 include("DecisionTree.jl")

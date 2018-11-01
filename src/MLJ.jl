@@ -1,6 +1,7 @@
 module MLJ
 
 export glossary
+export Rows, Cols, Names
 export features, X_and_y
 export rms, rmsl, rmslp1, rmsp
 export TrainableModel, prefit, dynamic, fit!
@@ -292,18 +293,24 @@ end
 # end
 
 
-## METHODS TO CLOSE GAP BETWEEN `Array`s, `DataFrame`s AND JuliaDB `Table`s
+## UNIVERSAL ADAPTOR FOR DATA CONTAINERS
 
-# note: for now trying to avoid complicated data interface to accommodate
-# a variety of data containers but ultimately this may be unavoidable
+struct Rows end
+struct Cols end
+struct Names end
 
-select(df::AbstractDataFrame, selection) = df[selection]
-(df::DataFrame)(rows) = view(df, rows)
-(df::SubDataFrame)(rows) = view(df, rows)
-(v::Vector)(rows) = v[rows]      # TODO might later try to return views but require extra complexity
-(A::Matrix)(rows) = A[rows, :]
-#  names(t::Table) = isempty(table) ? Symbol[] : getfields(t[1])
-# (t::Table)(rows) = t[rows]
+Base.getindex(df::AbstractDataFrame, ::Type{Rows}, r) = df[r,:]
+Base.getindex(df::AbstractDataFrame, ::Type{Cols}, c) = df[c]
+Base.getindex(df::AbstractDataFrame, ::Type{Names}) = names(df)
+
+# Base.getindex(df::JuliaDB.Table, ::Type{Rows}, r) = df[r]
+# Base.getindex(df::JuliaDB.Table, ::Type{Cols}, c) = select(df, c)
+# Base.getindex(df::JuliaDB.Table, ::Type{Names}) = getfields(typeof(df.columns.columns))
+
+Base.getindex(A::AbstractArray, ::Type{Rows}, r) = A[r,:]
+Base.getindex(A::AbstractArray, ::Type{Cols}, c) = A[:,c]
+
+Base.getindex(v::AbstractVector, ::Type{Rows}, r) = v[r]
 
 
 ## CONCRETE TASK TYPES
@@ -334,15 +341,16 @@ RegressionTask(; kwargs...)     = SupervisedTask(; kind=:regression, kwargs...)
 
 ## RUDIMENTARY TASK OPERATIONS
 
-features(task::Task) = filter!(names(task.data)) do ftr
+features(task::Task) = filter!(task.data[Names]) do ftr
     !(ftr in task.ignore)
 end
 
-features(task::SupervisedTask) = filter(names(task.data)) do ftr
+features(task::SupervisedTask) = filter(task.data[Names]) do ftr
     ftr != task.target && !(ftr in task.ignore)
 end
 
-X_and_y(task::SupervisedTask) = select(task.data, features(task)), select(task.data, task.target)
+X_and_y(task::SupervisedTask) = (task.data[Cols, features(task)],
+                                 task.data[Cols, task.target])
 
 
 ## SOME LOCALLY ARCHIVED TASKS FOR TESTING AND DEMONSTRATION
@@ -451,7 +459,7 @@ function fit!(trainable::TrainableModel, rows; verbosity=1, kwargs...)
         state = nothing
     end
 
-    args = (arg(rows) for arg in trainable.args)
+    args = (arg[Rows, rows] for arg in trainable.args)
     trainable.estimator, trainable.state, report =
         fit(trainable.model, args..., state, verbosity-1; kwargs...)
 
@@ -574,13 +582,13 @@ function dynamic(operator::Function, args...)
     return DynamicData(operator, trainable, args...)
 end
 
-# make dynamic data callable:
-(X::DynamicData)(rows) =
-    (X.operator)(X.trainable, [X.args[j](rows) for j in eachindex(X.args)]...)
+# make dynamic data row-indexable:
+Base.getindex(X::DynamicData, ::Type{Rows}, r) =
+    (X.operator)(X.trainable, [X.args[j][Rows,r] for j in eachindex(X.args)]...)
 
 # special case of static operators:
-(X::DynamicData{Nothing})(rows) =
-    (X.operator)([X.args[j](rows) for j in eachindex(X.args)]...)
+Base.getindex(X::DynamicData{Nothing}, ::Type{Rows}, r) =
+    (X.operator)([X.args[j][Rows,r] for j in eachindex(X.args)]...)
 
 # the "fit through" method:
 function fit!(X::DynamicData, rows; verbosity=1, kwargs...)
