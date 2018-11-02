@@ -33,26 +33,27 @@ macro constant(ex)
     end
 end
 
-
-## HELPER
-
 """to display abbreviated versions of integers"""
 abbreviated(n) = "..."*string(n)[end-2:end]
 
+"""return abbreviated object id (as string)  or it's registered handle (as string) if this exists"""
+function handle(X)
+    id = objectid(X)
+    if id in keys(handle_given_id)
+        return string(handle_given_id[id])
+    else
+        return abbreviated(id)
+    end
+end
 
 ## EXPOSED SHOW METHODS
 
 # short version of showing a `MLJType` object:
 function Base.show(stream::IO, object::MLJType)
     id = objectid(object) 
-    if  id in keys(handle_given_id)
-        handle = handle_given_id[id] |> string
-    else
-        handle = abbreviated(id)
-    end
     description = string(typeof(object).name.name)
     #   description = string(typeof(object))
-    str = "$description @ $handle"
+    str = "$description @ $(handle(object))"
     if !isempty(fieldnames(typeof(object)))
         printstyled(IOContext(stream, :color=> true), str,
                     color=:blue)

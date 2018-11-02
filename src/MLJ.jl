@@ -42,7 +42,7 @@ using LinearAlgebra
 # CONSTANTS
 
 const srcdir = dirname(@__FILE__) # the directory containing this file 
-
+const TREE_INDENT = 2 # indentation for tree-based display of dynamic data 
 
 ## GLOSSARY
 
@@ -298,19 +298,24 @@ end
 struct Rows end
 struct Cols end
 struct Names end
+struct Echo end # needed to terminate calls of dynamic data types on unseen source data
 
 Base.getindex(df::AbstractDataFrame, ::Type{Rows}, r) = df[r,:]
 Base.getindex(df::AbstractDataFrame, ::Type{Cols}, c) = df[c]
 Base.getindex(df::AbstractDataFrame, ::Type{Names}) = names(df)
+Base.getindex(df::AbstractDataFrame, ::Type{Echo}, dg) = dg
 
 # Base.getindex(df::JuliaDB.Table, ::Type{Rows}, r) = df[r]
 # Base.getindex(df::JuliaDB.Table, ::Type{Cols}, c) = select(df, c)
 # Base.getindex(df::JuliaDB.Table, ::Type{Names}) = getfields(typeof(df.columns.columns))
+# Base.getindex(df::JuliaDB.Table, ::Type{Echo}, dg) = dg
 
 Base.getindex(A::AbstractArray, ::Type{Rows}, r) = A[r,:]
 Base.getindex(A::AbstractArray, ::Type{Cols}, c) = A[:,c]
+Base.getindex(A::AbstractArray, ::Type{Echo}, B) = B
 
 Base.getindex(v::AbstractVector, ::Type{Rows}, r) = v[r]
+Base.getindex(v::AbstractVector, ::Type{Echo}, w) = w
 
 
 ## CONCRETE TASK TYPES
@@ -532,7 +537,8 @@ struct DynamicData{M<:Union{TrainableModel, Nothing}} <: MLJType
     operator::Function              # eg, `predict` or `inverse_transform` or a static operator
     trainable::M                        # is `nothing` for static operators
     args                            # data (static or dynamic) furnishing inputs for `operator`
-    tape::Vector{TrainableModel}   # for tracking dependencies
+    tape::Vector{TrainableModel}    # for tracking dependencies
+    depth::Int64       
 
     function DynamicData{M}(operator, trainable::M, args...) where M<:Union{TrainableModel, Nothing}
 
@@ -549,10 +555,16 @@ struct DynamicData{M<:Union{TrainableModel, Nothing}} <: MLJType
             merge!(tape, get_tape(arg))
         end
 
-        return new{M}(operator, trainable, args, tape)
+        depth = maximum(get_depth(arg) for arg in args) + 1
+
+        return new{M}(operator, trainable, args, tape, depth)
 
     end
 end
+
+# ... where
+get_depth(::Any) = 0
+get_depth(X::DynamicData) = X.depth
 
 # to complete the definition of `TrainableModel` and `DynamicData`
 # constructors:
@@ -583,27 +595,71 @@ function dynamic(operator::Function, args...)
 end
 
 # make dynamic data row-indexable:
-Base.getindex(X::DynamicData, ::Type{Rows}, r) =
-    (X.operator)(X.trainable, [X.args[j][Rows,r] for j in eachindex(X.args)]...)
+Base.getindex(y::DynamicData, ::Type{Rows}, r) =
+    (y.operator)(y.trainable, [y.args[j][Rows,r] for j in eachindex(y.args)]...)
 
 # special case of static operators:
-Base.getindex(X::DynamicData{Nothing}, ::Type{Rows}, r) =
-    (X.operator)([X.args[j][Rows,r] for j in eachindex(X.args)]...)
+Base.getindex(y::DynamicData{Nothing}, ::Type{Rows}, r) =
+    (y.operator)([y.args[j][Rows,r] for j in eachindex(y.args)]...)
+
+# note: the following two methods only work as expected if the dynamic data `y`
+# has a single ultimate source:
+
+# calling `y[Echo, Xnew]` gets "value" of `y` as if ultimate source of
+# `y` (as learning network) is replaced with `Xnew`:
+Base.getindex(y::DynamicData, ::Type{Echo}, Xnew) =
+    (y.operator)(y.trainable, [y.args[j][Echo,Xnew] for j in eachindex(y.args)]...)
+
+# specializing to static operators:
+Base.getindex(y::DynamicData{Nothing}, ::Type{Echo}, Xnew) =
+    (y.operator)([y.args[j][Echo,Xnew] for j in eachindex(y.args)]...)
 
 # the "fit through" method:
-function fit!(X::DynamicData, rows; verbosity=1, kwargs...)
-    for trainable in X.tape[1:end-1]
+function fit!(y::DynamicData, rows; verbosity=1, kwargs...)
+    for trainable in y.tape[1:end-1]
         fit!(trainable, rows; verbosity=verbosity)
     end
-    fit!(X.tape[end], rows; verbosity=verbosity, kwargs...)
-    return X
+    fit!(y.tape[end], rows; verbosity=verbosity, kwargs...)
+    return y
 end
 
-    
-## SYNTACTIC SUGAR FOR DYNAMIC DATA (PIPELINING)
+# overload show method:
+function spaces(n)
+    s = ""
+    for i in 1:n
+        s = string(s, " ")
+    end
+    return s
+end
+function Base.show(stream::IO, ::MIME"text/plain", X::DynamicData)
+    gap = spaces(TREE_INDENT*get_depth(X) + TREE_INDENT)
+    detail = (X.trainable == nothing ? "" : " ($(X.trainable))")
+    println(stream, gap, handle(X), " = ", X.operator, detail, ":")
+    for arg in X.args
+        if arg isa DynamicData
+            show(stream, MIME("text/plain"), arg)
+        else
+            id = objectid(arg)
+            if id in keys(handle_given_id)
+                representation = handle_given_id[id]
+            else
+                representation = "*"
+            end
+            println(stream, gap[1:end-TREE_INDENT], representation)
+        end
+    end
+end
+
+## SYNTACTIC SUGAR FOR DYNAMIC DATA
     
 dynamic(X) = dynamic(identity, X)
-dynamic(X::DynamicData) = X 
+dynamic(X::DynamicData) = X
+
+# make dynamic data callable on unseen source data:
+(y::DynamicData)(Xnew) = y[Echo, Xnew]
+
+# TODO: write method `source` that locates ultimate source of a dynamic
+# data's input data
 
 predict(model::TrainableModel{L}, X::DynamicData) where L<:Learner =
     dynamic(predict, model, X)
