@@ -632,23 +632,32 @@ function spaces(n)
     return s
 end
 function Base.show(stream::IO, ::MIME"text/plain", X::DynamicData)
-    gap = spaces(TREE_INDENT*get_depth(X) + TREE_INDENT)
-    detail = (X.trainable == nothing ? "" : " ($(X.trainable))")
-    println(stream, gap, handle(X), " = ", X.operator, detail, ":")
-    for arg in X.args
-        if arg isa DynamicData
-            show(stream, MIME("text/plain"), arg)
-        else
-            id = objectid(arg)
-            if id in keys(handle_given_id)
-                representation = handle_given_id[id]
+    gap = spaces(20 - TREE_INDENT*get_depth(X) + TREE_INDENT)
+    if X.operator == identity && !(X.args[1] isa DynamicData)
+        print(stream, gap, handle(X.args[1]))
+    else
+        detail = (X.trainable == nothing ? "(" : "($(handle(X.trainable.model)),")
+        operator_name = typeof(X.operator).name.mt.name
+        #    println(stream, gap, handle(X), " = ", operator_name, detail)
+        println(stream, gap, operator_name, detail)
+        for arg in X.args
+            if arg isa DynamicData
+                show(stream, MIME("text/plain"), arg)
             else
-                representation = "*"
+                # id = objectid(arg)
+                # if id in keys(handle_given_id)
+                #     representation = handle_given_id[id]
+                # else
+                #     representation = "*"
+                # end
+                # print(stream, gap[1:end-TREE_INDENT], representation)
+                print(stream, gap, spaces(TREE_INDENT), handle(arg))
             end
-            println(stream, gap[1:end-TREE_INDENT], representation)
         end
     end
+    print(stream, ")")
 end
+
 
 ## SYNTACTIC SUGAR FOR DYNAMIC DATA
     
