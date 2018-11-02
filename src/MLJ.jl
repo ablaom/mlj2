@@ -481,7 +481,7 @@ end
 ## MODEL INTERFACE - SPECIFIC TO SUPERVISED LEARNERS
 
 # users' trainable model constructor for supervised models:
-function prefit(X, y; model::S=nothing) where S<:Supervised
+function prefit(model::S, X, y) where S<:Supervised
     model != nothing ||
         throw(error"You must specify model=..."))
     return TrainableModel(model, X, y)
