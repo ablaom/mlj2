@@ -481,9 +481,9 @@ end
 ## MODEL INTERFACE - SPECIFIC TO SUPERVISED LEARNERS
 
 # users' trainable model constructor for supervised models:
-function prefit(model::S, X=nothing, y=nothing) where S<:Supervised
-    !(X == nothing || y == nothing) ||
-        @warn "To make trainable instead use `prefit(model, X, y)` or later call `model.args = X, y`."
+function prefit(X, y; model::S=nothing) where S<:Supervised
+    model != nothing ||
+        throw(error"You must specify model=..."))
     return TrainableModel(model, X, y)
 end
 
@@ -492,7 +492,7 @@ function predict(trainable::TrainableModel{L}, X) where L<: Learner
     if isdefined(trainable, :estimator)
         return predict(trainable.model, trainable.estimator, X)
     else
-        throw(error("$trainable is not trained and so cannot predict. Perhaps you meant to pass dynamic data?"))
+        throw(error("$trainable with model $(trainable.model) is not trained and so cannot predict."))
     end
 end
 
@@ -517,7 +517,7 @@ function transform(trainable::TrainableModel{T}, X) where T<:Transformer
     if isdefined(trainable, :estimator)
         return transform(trainable.model, trainable.estimator, X)
     else
-        throw(error("$trainable is not trained and so cannot transform. Perhaps you meant to pass dynamic data?"))
+        throw(error("$trainable with model $(trainable.model) is not trained and so cannot transform."))
     end
 end
 
@@ -525,7 +525,7 @@ function inverse_transform(trainable::TrainableModel{T}, X) where T<:Transformer
     if isdefined(trainable, :estimator)
         return inverse_transform(trainable.model, trainable.estimator, X)
     else
-        throw(error("$trainable is not trained and so cannot inverse_transform.  Perhaps you meant to pass dynamic data?"))
+        throw(error("$trainable with model $(trainabl.model) is not trained and so cannot inverse_transform."))
     end
 end
 
@@ -677,6 +677,24 @@ transform(trainable::TrainableModel{T}, X::DynamicData) where T<:Transformer =
 inverse_transform(trainable::TrainableModel{T}, X::DynamicData) where T<:Transformer =
     dynamic(inverse_transform, trainable, X)
 
+function predict(model::Learner, X, y)
+    X = dynamic(X)
+    y = dynamic(y)
+    trainable = prefit(model, X, y)
+    return predict(trainable, X)
+end
+
+function transform(model::Transformer, X)
+    X = dynamic(X)
+    trainable = prefit(model, X)
+    return transform(trainable, X)
+end
+
+function inverse_transform(model::Transformer, X)
+    X = dynamic(X)
+    trainable = prefit(model, X)
+    return inverse_transform(trainable, X)
+end
 
 array(X) = convert(Array, X)
 array(X::DynamicData) = dynamic(array, X)
