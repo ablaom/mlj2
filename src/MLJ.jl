@@ -488,11 +488,11 @@ function prefit(model::S, X=nothing, y=nothing) where S<:Supervised
 end
 
 # predict method for learner models:
-function predict(model::TrainableModel{L}, X) where L<: Learner 
-    if isdefined(model, :estimator)
-        return predict(model.model, model.estimator, X)
+function predict(trainable::TrainableModel{L}, X) where L<: Learner 
+    if isdefined(trainable, :estimator)
+        return predict(trainable.model, trainable.estimator, X)
     else
-        throw(error("$model is not trained and so cannot predict. Perhaps you meant to pass dynamic data?"))
+        throw(error("$trainable is not trained and so cannot predict. Perhaps you meant to pass dynamic data?"))
     end
 end
 
@@ -513,19 +513,19 @@ function prefit(model::T, X=nothing) where T<:Transformer
     return TrainableModel(model, X)
 end
 
-function transform(model::TrainableModel{T}, X) where T<:Transformer
-    if isdefined(model, :estimator)
-        return transform(model.model, model.estimator, X)
+function transform(trainable::TrainableModel{T}, X) where T<:Transformer
+    if isdefined(trainable, :estimator)
+        return transform(trainable.model, trainable.estimator, X)
     else
-        throw(error("$model is not trained and so cannot transform. Perhaps you meant to pass dynamic data?"))
+        throw(error("$trainable is not trained and so cannot transform. Perhaps you meant to pass dynamic data?"))
     end
 end
 
-function inverse_transform(model::TrainableModel{T}, X) where T<:Transformer
-    if isdefined(model, :estimator)
-        return inverse_transform(model.model, model.estimator, X)
+function inverse_transform(trainable::TrainableModel{T}, X) where T<:Transformer
+    if isdefined(trainable, :estimator)
+        return inverse_transform(trainable.model, trainable.estimator, X)
     else
-        throw(error("$model is not trained and so cannot inverse_transform.  Perhaps you meant to pass dynamic data?"))
+        throw(error("$trainable is not trained and so cannot inverse_transform.  Perhaps you meant to pass dynamic data?"))
     end
 end
 
@@ -661,12 +661,13 @@ dynamic(X::DynamicData) = X
 # TODO: write method `source` that locates ultimate source of a dynamic
 # data's input data
 
-predict(model::TrainableModel{L}, X::DynamicData) where L<:Learner =
-    dynamic(predict, model, X)
-transform(model::TrainableModel{T}, X::DynamicData) where T<:Transformer =
-    dynamic(transform, model, X)
-inverse_transform(model::TrainableModel{T}, X::DynamicData) where T<:Transformer =
-    dynamic(inverse_transform, model, X)
+predict(trainable::TrainableModel{L}, X::DynamicData) where L<:Learner =
+    dynamic(predict, trainable, X)
+transform(trainable::TrainableModel{T}, X::DynamicData) where T<:Transformer =
+    dynamic(transform, trainable, X)
+inverse_transform(trainable::TrainableModel{T}, X::DynamicData) where T<:Transformer =
+    dynamic(inverse_transform, trainable, X)
+
 
 array(X) = convert(Array, X)
 array(X::DynamicData) = dynamic(array, X)
