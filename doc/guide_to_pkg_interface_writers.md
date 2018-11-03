@@ -104,16 +104,26 @@ special training functions must be passed as `kwargs`, which are their
 exclusive purpose. Any other "instructions" (e.g., train using 5 threads)
 must be conveyed by the hyperparameter values (fields of `learner`).
 
+To enhance functionality at higher levels of the interface, the
+`kwargs` instruction for adding `n` iterations to an iterative method
+must be `add=n`.
+
 Note that `fit` must accept `nothing` as a valid input `state` but
 should never *return* `nothing` as `state` output. For the majority of
 supervised learners, the fit-result serves well enough as the output
 `state`.
 
-To enhance functionality at higher levels of the interface, the
-`kwargs` instruction for adding `n` iterations to an iterative method
-must be `add=n`.
-
 The Julia type of `state` is not presently restricted.
+
+Another possible use case for special fit instructions is the
+composite learner. For example, we may want to retrain a composite of
+an ordinary learner with a scaling transformer without refitting the
+scaling when tuning the ordinary learner's hyperparameters. This
+requires that the previous state of the composite be passed in to the
+composite's fit method.
+
+> One issue here is whether passing fit with special instructions
+> might have unpredictable consequences if *new* data is also passed.
 
 Any training-related statistics (e.g., internal estimate of the
 generalization error, feature importances), as well as the results of

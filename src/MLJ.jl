@@ -397,20 +397,15 @@ clean!(estimator::Model) = ""
 """ 
     merge!(tape1, tape2)
 
-Assumes each argument has a field called `model` of type
-`Model`. Incrementally appends to `tape1` all elements in `tape2`,
-excluding any element whose associated model is the model of a
-previously added element, or an element of `tape1` in its initial
-state.
+Incrementally appends to `tape1` all elements in `tape2`, excluding
+any element previously added (or any element of `tape1` in its initial
+state).
 
 """
-function Base.merge!(tape1, tape2)
-    models = Model[trainable.model for trainable in tape1]
+function Base.merge!(tape1::Vector, tape2::Vector)
     for trainable in tape2
-        model = trainable.model
-        if !(model in models)
+        if !(trainable in tape1)
             push!(tape1, trainable)
-            push!(models, model)
         end
     end
     return tape1
@@ -683,36 +678,6 @@ transform(trainable::TrainableModel{T}, X::DynamicData) where T<:Transformer =
     dynamic(transform, trainable, X)
 inverse_transform(trainable::TrainableModel{T}, X::DynamicData) where T<:Transformer =
     dynamic(inverse_transform, trainable, X)
-
-# prefit and predict in one go (always returns dynamic) - supervised
-function predict(model::Supervised, X; target=nothing)
-    target != nothing || throw(error("You must specify target=..."))
-    X = dynamic(X)
-    y = dynamic(target)
-    trainable = prefit(model, X, y)
-    return predict(trainable, X)
-end
-
-# prefit and predict in one go (always returns dynamic) - unsupervised
-function predict(model::Unsupervised, X)
-    X = dynamic(X)
-    trainable = prefit(model, X)
-    return predict(trainable, X)
-end
-
-# prefit and transform in one go (always returns dynamic) 
-function transform(model::Transformer, X)
-    X = dynamic(X)
-    trainable = prefit(model, X)
-    return transform(trainable, X)
-end
-
-# prefit and inverse transform in one go (always returns dynamic)
-function inverse_transform(model::Transformer, X)
-    X = dynamic(X)
-    trainable = prefit(model, X)
-    return inverse_transform(trainable, X)
-end
 
 array(X) = convert(Array, X)
 array(X::DynamicData) = dynamic(array, X)
