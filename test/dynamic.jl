@@ -1,5 +1,6 @@
 module TestDynamic
 
+using Revise
 using Test
 using MLJ
 
@@ -29,15 +30,13 @@ tape = MLJ.get_tape
 @test isempty(tape(knn1))
 
 X, y = datanow(); # ALL of the data, training, test and validation
-@constant Xc = X
-@constant yc = y
 
 # split the rows into training and testing rows:
-allrows = eachindex(yc)
+allrows = eachindex(y)
 fold1, fold2 = partition(allrows, 0.7) # 70:30 split
 
-Xd = dynamic(Xc)
-yd = dynamic(yc)
+@constant Xd = dynamic(X)
+@constant yd = dynamic(y)
 
 # construct a transformer to standardize the target:
 uscale_ = UnivariateStandardizer()

@@ -638,10 +638,12 @@ function Base.show(stream::IO, ::MIME"text/plain", X::DynamicData)
     if X.operator == identity && !(X.args[1] isa DynamicData) 
         print(stream, gap, handle(X))#.args[1]))
     else
-        detail = (X.trainable == nothing ? "(" : "($(handle(X.trainable.model)),")
+        detail = (X.trainable == nothing ? "(" : "($(handle(X.trainable)),")
         operator_name = typeof(X.operator).name.mt.name
         #    println(stream, gap, handle(X), " = ", operator_name, detail)
         println(stream, gap, operator_name, detail)
+        n_args = length(X.args)
+        counter = 1
         for arg in X.args
             if arg isa DynamicData
                 show(stream, MIME("text/plain"), arg)
@@ -655,6 +657,8 @@ function Base.show(stream::IO, ::MIME"text/plain", X::DynamicData)
                 # print(stream, gap[1:end-TREE_INDENT], representation)
                 print(stream, gap, spaces(TREE_INDENT), handle(arg))
             end
+            counter >= n_args || println(stream, ", ")
+            counter += 1
         end
     print(stream, ")")
     end

@@ -67,7 +67,6 @@ mutable struct KNNRegressor <: Regressor{R}
     K::Int           # number of local target values averaged
     metric::Function
     kernel::Function # each target value is weighted by `kernel(distance^2)`
-    frozen::Bool
 end
 
 ````
@@ -79,10 +78,6 @@ constructor of the same name that defines default values. See
 for the validity of field values (hyperparameters) is performed by an
 optional `clean!` method (see below).
 
-The last field `frozen` is a compulsory field that is not actually a
-hyperparameter, but it is needed to flag models that should not be
-retrained in learning networks constructed at a higher level of the
-interface. It's default value should be `false`.
 
 ### Supervised models
 
