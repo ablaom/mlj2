@@ -24,14 +24,12 @@ mutable struct ToIntTransformer <: Transformer
     sorted::Bool
     initial_label::Int # ususally 0 or 1
     map_unseen_to_minus_one::Bool # unseen inputs are transformed to -1
-    frozen::Bool
 end
 
 ToIntTransformer(; sorted=true, initial_label=1
-                 , map_unseen_to_minus_one=false
-                 , frozen=false) =
+                 , map_unseen_to_minus_one=false) =
                      ToIntTransformer(sorted, initial_label,
-                                      map_unseen_to_minus_one, frozen)
+                                      map_unseen_to_minus_one)
 
 struct ToIntEstimator{T} <: MLJType
     n_levels::Int
@@ -106,10 +104,7 @@ inverse_transform(transformer::ToIntTransformer, estimator::ToIntEstimator{T},
 ## UNIVARIATE STANDARDIZATION
 
 mutable struct UnivariateStandardizer <: Transformer
-    frozen::Bool
 end
-
-UnivariateStandardizer(; frozen=false) = UnivariateStandardizer(frozen)
 
 function fit(transformer::UnivariateStandardizer, v::AbstractVector{T}, 
              state, verbosity) where T <: Real
@@ -152,11 +147,10 @@ inverse_transform(transformer::UnivariateStandardizer, estimator, w) =
 """ Standardizers the columns of eltype <: AbstractFloat unless non-empty `features` specfied."""
 mutable struct Standardizer <: Transformer
     features::Vector{Symbol} # features to be standardized; empty means all of
-    frozen::Bool
 end
 
 # lazy keyword constructor:
-Standardizer(; features=Symbol[], frozen=false) = Standardizer(features, frozen)
+Standardizer(; features=Symbol[]) = Standardizer(features)
 
 struct StandardizerEstimator <: MLJType
     estimators::Matrix{Float64}

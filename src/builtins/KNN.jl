@@ -19,15 +19,14 @@ mutable struct KNNRegressor <: Regressor{KNNEstimatorType}
     K::Int           # number of local target values averaged
     metric::Function
     kernel::Function # each target value is weighted by `kernel(distance^2)`
-    frozen::Bool
 end
 
 euclidean(v1, v2) = norm(v2 - v1)
 reciprocal(d) = 1/d
 
 # lazy keywork constructor:
-function KNNRegressor(; K=1, metric=euclidean, kernel=reciprocal, frozen=false)
-    model = KNNRegressor(K, metric, kernel, frozen)
+function KNNRegressor(; K=1, metric=euclidean, kernel=reciprocal)
+    model = KNNRegressor(K, metric, kernel)
     message = clean!(model)
     isempty(message) || @warn message
     return model

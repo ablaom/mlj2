@@ -372,9 +372,6 @@ include("datasets.jl")
 
 ## PACKAGE INTERFACE METHODS 
 
-freeze!(model::Model) = (model.frozen = true; model)
-thaw!(model::Model) = (model.frozen = false; model)
-
 # to be extended by interfaces:
 function fit end
 function predict end
@@ -430,10 +427,12 @@ mutable struct TrainableModel{B<:Model} <: MLJType
     args
     report
     tape::Vector{TrainableModel}
+    frozen::Bool
     
     function TrainableModel{B}(model::B, args...) where B<:Model
 
         trainable = new{B}(model)
+        trainable.frozen = false
         trainable.args = args
         trainable.report = Dict{Symbol,Any}()
 
@@ -459,8 +458,8 @@ TrainableModel(model::B, args...) where B<:Model = TrainableModel{B}(model, args
 # fit method:
 function fit!(trainable::TrainableModel, rows; verbosity=1, kwargs...)
 
-    if trainable.model.frozen && verbosity > -1
-        @warn "$trainable not trained. Model $(trainable.model) is frozen."
+    if trainable.frozen && verbosity > -1
+        @warn "$trainable not trained as it is frozen."
         return trainable
     end
         
