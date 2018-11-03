@@ -295,6 +295,12 @@ end
 
 ## UNIVERSAL ADAPTOR FOR DATA CONTAINERS
 
+# For vectors and tabular data containers `df`:
+# `df[Rows, r]` gets rows of `df` at `r` (single integer, range or colon)
+# `df[Cols, c]` selects features of df at `c` (single integer, range or colon); not supported for vectors
+# `df[Names]` returns names of all features of `df` (or indices if unsupported)
+
+
 struct Rows end
 struct Cols end
 struct Names end
@@ -312,6 +318,7 @@ Base.getindex(df::AbstractDataFrame, ::Type{Echo}, dg) = dg
 
 Base.getindex(A::AbstractArray, ::Type{Rows}, r) = A[r,:]
 Base.getindex(A::AbstractArray, ::Type{Cols}, c) = A[:,c]
+Base.getindex(A::AbstractArray, ::Type{Names}) = 1:size(A, 2)
 Base.getindex(A::AbstractArray, ::Type{Echo}, B) = B
 
 Base.getindex(v::AbstractVector, ::Type{Rows}, r) = v[r]
@@ -482,8 +489,6 @@ end
 
 # users' trainable model constructor for supervised models:
 function prefit(model::S, X, y) where S<:Supervised
-    model != nothing ||
-        throw(error"You must specify model=..."))
     return TrainableModel(model, X, y)
 end
 
@@ -507,9 +512,7 @@ end
 ## MODEL INTERFACE - SPECIFIC TO TRANSFORMERS
 
 # users' trainable model constructor for transformers:
-function prefit(model::T, X=nothing) where T<:Transformer
-    X != nothing ||
-        @warn "To make trainable instead use `prefit(model, X)` or later call `model.args = X`."
+function prefit(model::T, X) where T<:Transformer
     return TrainableModel(model, X)
 end
 
@@ -525,7 +528,7 @@ function inverse_transform(trainable::TrainableModel{T}, X) where T<:Transformer
     if isdefined(trainable, :estimator)
         return inverse_transform(trainable.model, trainable.estimator, X)
     else
-        throw(error("$trainable with model $(trainabl.model) is not trained and so cannot inverse_transform."))
+        throw(error("$trainable with model $(trainable.model) is not trained and so cannot inverse_transform."))
     end
 end
 
@@ -633,8 +636,8 @@ function spaces(n)
 end
 function Base.show(stream::IO, ::MIME"text/plain", X::DynamicData)
     gap = spaces(20 - TREE_INDENT*get_depth(X) + TREE_INDENT)
-    if X.operator == identity && !(X.args[1] isa DynamicData)
-        print(stream, gap, handle(X.args[1]))
+    if X.operator == identity && !(X.args[1] isa DynamicData) 
+        print(stream, gap, handle(X))#.args[1]))
     else
         detail = (X.trainable == nothing ? "(" : "($(handle(X.trainable.model)),")
         operator_name = typeof(X.operator).name.mt.name
@@ -654,8 +657,8 @@ function Base.show(stream::IO, ::MIME"text/plain", X::DynamicData)
                 print(stream, gap, spaces(TREE_INDENT), handle(arg))
             end
         end
-    end
     print(stream, ")")
+    end
 end
 
 
@@ -670,6 +673,7 @@ dynamic(X::DynamicData) = X
 # TODO: write method `source` that locates ultimate source of a dynamic
 # data's input data
 
+# remove need for `dynamic` syntax in case of operators of main interest:
 predict(trainable::TrainableModel{L}, X::DynamicData) where L<:Learner =
     dynamic(predict, trainable, X)
 transform(trainable::TrainableModel{T}, X::DynamicData) where T<:Transformer =
@@ -677,19 +681,30 @@ transform(trainable::TrainableModel{T}, X::DynamicData) where T<:Transformer =
 inverse_transform(trainable::TrainableModel{T}, X::DynamicData) where T<:Transformer =
     dynamic(inverse_transform, trainable, X)
 
-function predict(model::Learner, X, y)
+# prefit and predict in one go (always returns dynamic) - supervised
+function predict(model::Supervised, X; target=nothing)
+    target != nothing || throw(error("You must specify target=..."))
     X = dynamic(X)
-    y = dynamic(y)
+    y = dynamic(target)
     trainable = prefit(model, X, y)
     return predict(trainable, X)
 end
 
+# prefit and predict in one go (always returns dynamic) - unsupervised
+function predict(model::Unsupervised, X)
+    X = dynamic(X)
+    trainable = prefit(model, X)
+    return predict(trainable, X)
+end
+
+# prefit and transform in one go (always returns dynamic) 
 function transform(model::Transformer, X)
     X = dynamic(X)
     trainable = prefit(model, X)
     return transform(trainable, X)
 end
 
+# prefit and inverse transform in one go (always returns dynamic)
 function inverse_transform(model::Transformer, X)
     X = dynamic(X)
     trainable = prefit(model, X)
@@ -698,6 +713,12 @@ end
 
 array(X) = convert(Array, X)
 array(X::DynamicData) = dynamic(array, X)
+
+Base.log(v::Vector{<:Number}) = log.(v)
+Base.exp(v::Vector{<:Number}) = exp.(v)
+Base.log(X::DynamicData) = dynamic(log, X)
+Base.exp(X::DynamicData) = dynamic(exp, X)
+
 
 rms(y::DynamicData, yhat::DynamicData) = dynamic(rms, y, yhat)
 rms(y, yhat::DynamicData) = dynamic(rms, y, yhat)

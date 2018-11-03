@@ -34,7 +34,10 @@ macro constant(ex)
 end
 
 """to display abbreviated versions of integers"""
-abbreviated(n) = "..."*string(n)[end-2:end]
+function abbreviated(n)
+    as_string = string(n)
+    return as_string[1]*"…"*as_string[end-1:end]
+end
 
 """return abbreviated object id (as string)  or it's registered handle (as string) if this exists"""
 function handle(X)

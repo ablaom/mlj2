@@ -1,3 +1,8 @@
+module TestDecisionTree
+
+using MLJ
+using Test
+
 task = load_iris();
 
 # check some rudimentary task functions:
@@ -27,3 +32,4 @@ estimator, state, report = fit(baretree, X_array, y,
 yhat = predict(baretree, estimator, X_array)
 @test yhat != y
 
+end

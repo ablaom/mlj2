@@ -105,7 +105,7 @@ inverse_transform(transformer::ToIntTransformer, estimator::ToIntEstimator{T},
 
 ## UNIVARIATE STANDARDIZATION
 
-struct UnivariateStandardizer <: Transformer
+mutable struct UnivariateStandardizer <: Transformer
     frozen::Bool
 end
 

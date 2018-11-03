@@ -1,3 +1,8 @@
+module TestTransformer
+
+using MLJ
+using Test
+
 # relabelling with integer transformer:
 y = rand(Char, 50)
 allrows = eachindex(y)
@@ -33,3 +38,4 @@ stand = prefit(Standardizer(features=[:GrLivArea]), X)
 fit!(stand, eachindex(y))
 transform(stand, X)
 
+end
