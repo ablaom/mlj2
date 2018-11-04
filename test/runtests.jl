@@ -20,7 +20,7 @@ v = [1,2,3,4];
 
 @constant junk=KNNRegressor()
 
-# include("KNN.jl")
+include("KNN.jl")
 # include("dynamic.jl")
 # include("Transformer.jl")
 include("DecisionTree.jl")

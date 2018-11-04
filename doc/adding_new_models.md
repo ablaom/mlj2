@@ -111,10 +111,9 @@ end
 
 Models (which are mutable) should never have internally defined
 constructors but should always be given an external lazy keyword
-constructor of the same name that defines default values. See the
-template. Checking and correcting for the validity of field values
-(hyperparameters) is performed by an optional `clean!` method (see
-below).
+constructor of the same name that defines default values and checks
+their validity by calling an optional clean! method (which has a
+trivial fall-back). 
 
 
 ### Supervised models

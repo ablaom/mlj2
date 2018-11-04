@@ -9,13 +9,13 @@ using Dates
 using LinearAlgebra
 
 # to be extended:
-import MLJ: predict, fit, clean!
+import MLJ: predict, fit, fit2, clean!
 
-KNNEstimatorType = Tuple{Matrix{Float64},Vector{Float64}, Dates.DateTime}
+KNNFitResultType = Tuple{Matrix{Float64},Vector{Float64}, Dates.DateTime}
 
 # TODO: introduce type parameters for the function fields (metric, kernel)
 
-mutable struct KNNRegressor <: Regressor{KNNEstimatorType}
+mutable struct KNNRegressor <: Regressor{KNNFitResultType}
     K::Int           # number of local target values averaged
     metric::Function
     kernel::Function # each target value is weighted by `kernel(distance^2)`
@@ -42,18 +42,19 @@ function clean!(model::KNNRegressor)
 end
 
 function fit(model::KNNRegressor
+             , verbosity
              , X::Matrix{Float64}
-             , y::Vector{Float64}
-             , state                     
-             , verbosity) 
+             , y::Vector{Float64})
     
     # computing norms of rows later on is faster if we use the transpose of X:
     fitresult = (X', y)
-    state = fitresult
+    cache = nothing
     report = nothing
     
-    return fitresult, state, report 
+    return fitresult, cache, report 
 end
+
+fit2(model, verbosity, fitresult, cache, X, y) = fitresult, cache, nothing
 
 first_component_is_less_than(v, w) = isless(v[1], w[1])
 
@@ -65,9 +66,10 @@ function distances_and_indices_of_closest(K, metric, Xtrain, pattern)
     end
 
     sort!(distance_index_pairs, lt=first_component_is_less_than)
-    distances = Array{Float64}(undef, K)
-    indices = Array{Int}(undef, K)
-    for j in 1:K
+    Kprime = min(K,size(Xtrain, 2)) # in case less patterns than K
+    distances = Array{Float64}(undef, Kprime)
+    indices = Array{Int}(undef, Kprime)
+    for j in 1:Kprime
         distances[j] = distance_index_pairs[j][1]
         indices[j] = distance_index_pairs[j][2]
     end

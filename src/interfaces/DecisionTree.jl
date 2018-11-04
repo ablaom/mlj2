@@ -69,7 +69,7 @@ function DecisionTreeClassifier(
         , n_subfeatures
         , display_depth)
 
-    message = clean!(model)         #> future proof by including these 
+    message = clean!(model)           #> future proof by including these 
     isempty(message) || @warn message #> two lines even if no clean! defined below
 
     return model
