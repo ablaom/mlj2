@@ -22,15 +22,15 @@ import DecisionTree                #> import package
 import MLJ: Classifier, Regressor  #> and supertypes for the models to be defined
 
 
-#> The following bare model type is a parameterized type (not true in
+#> The following model type is a parameterized type (not true in
 #> general). This is because: (1) the classifier built by
-#> DecisionTree.jl has a estimator type that depends on the the target
+#> DecisionTree.jl has a fitresult type that depends on the the target
 #> type, here denoted `T`; and (2) our universal requirement that the
-#> types of estimators be declared (by specifying the parameter of the
-#> bare model supertype, in this case `Classifier`).
+#> types of fitresults be declared (by specifying the parameter of the
+#> model supertype, in this case `Classifier`).
 
-# estimator could be a stump, which has a different type from regular
-# tree; therefore, estimators are instances of a union type:
+# fitresult could be a stump, which has a different type from regular
+# tree; therefore, fitresults are instances of a union type:
 DecisionTreeClassifierEstimatorType{T} =
     Union{DecisionTree.Node{Float64,T}, DecisionTree.Leaf{T}}
 mutable struct DecisionTreeClassifier{T} <: Classifier{DecisionTreeClassifierEstimatorType{T}} 
@@ -86,7 +86,7 @@ function clean!(learner::DecisionTreeClassifier)
     return warning
 end
 
-#> a `fit` method returns (estimator, state, report)
+#> a `fit` method returns (fitresult, state, report)
 function fit(learner::DecisionTreeClassifier{T2}
              , X::Array{Float64,2}
              , y::Vector{T}
@@ -102,7 +102,7 @@ function fit(learner::DecisionTreeClassifier{T2}
 
     if prune_only
         state != nothing || throw(error("Cannot prune without state."))
-        estimator = DecisionTree.prune_tree(state, merge_purity_threshold)
+        fitresult = DecisionTree.prune_tree(state, merge_purity_threshold)
 
         #> return output of package-specific functionality (eg,
         #> feature rankings, internal estimates of generalization error)
@@ -111,14 +111,14 @@ function fit(learner::DecisionTreeClassifier{T2}
         report = Dict{Symbol,Any}()
         report[:last_prune] = "Tree last pruned with merge_purity_threshold=$merge_purity_threshold."
 
-        state = estimator
+        state = fitresult
 
-        return estimator, state, report
+        return fitresult, state, report
     end
 
     #> would have passed verbosity level below had it been supported.
     #> supported.
-    estimator = DecisionTree.build_tree(
+    fitresult = DecisionTree.build_tree(
         y
         , X
         , learner.n_subfeatures
@@ -127,18 +127,18 @@ function fit(learner::DecisionTreeClassifier{T2}
         , learner.min_samples_split
         , learner.min_purity_increase)
 
-    !display_tree || DecisionTree.print_tree(estimator, display_depth)
+    !display_tree || DecisionTree.print_tree(fitresult, display_depth)
 
-    state = estimator
+    state = fitresult
 
     report = nothing
     
-    return estimator, state, report 
+    return fitresult, state, report 
 end
 
 predict(learner::DecisionTreeClassifier 
-        , estimator
-        , Xnew::Union{Array{Float64,2},SubArray{Float64,2}}) = DecisionTree.apply_tree(estimator, collect(Xnew))
+        , fitresult
+        , Xnew::Union{Array{Float64,2},SubArray{Float64,2}}) = DecisionTree.apply_tree(fitresult, collect(Xnew))
 
 
 end # module

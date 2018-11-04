@@ -22,7 +22,7 @@ struct ToIntEstimator{T} <: MLJType
     T_given_int::Dict{Int, T}
 end
 
-# null estimator constructor:
+# null fitresult constructor:
 ToIntEstimator(S::Type{T}) where T =
     ToIntEstimator{T}(0, Dict{T, Int}(), Dict{Int, T}())
 
@@ -53,10 +53,10 @@ function fit(transformer::ToIntTransformer
 end
 
 # scalar case:
-function transform(transformer::ToIntTransformer, estimator::ToIntEstimator{T}, x::T) where T
+function transform(transformer::ToIntTransformer, fitresult::ToIntEstimator{T}, x::T) where T
     ret = 0 # otherwise ret below stays in local scope
     try 
-        ret = estimator.int_given_T[x]
+        ret = fitresult.int_given_T[x]
     catch exception
         if isa(exception, KeyError)
             if transformer.map_unseen_to_minus_one 
@@ -68,16 +68,16 @@ function transform(transformer::ToIntTransformer, estimator::ToIntEstimator{T}, 
     end
     return ret
 end 
-inverse_transform(transformer::ToIntTransformer, estimator, y::Int) =
-    estimator.T_given_int[y]
+inverse_transform(transformer::ToIntTransformer, fitresult, y::Int) =
+    fitresult.T_given_int[y]
 
 # vector case:
-function transform(transformer::ToIntTransformer, estimator::ToIntEstimator{T},
+function transform(transformer::ToIntTransformer, fitresult::ToIntEstimator{T},
                    v::AbstractVector{T}) where T
-    return Int[transform(transformer, estimator, x) for x in v]
+    return Int[transform(transformer, fitresult, x) for x in v]
 end
-inverse_transform(transformer::ToIntTransformer, estimator::ToIntEstimator{T},
-                  w::AbstractVector{Int}) where T = T[estimator.T_given_int[y] for y in w]
+inverse_transform(transformer::ToIntTransformer, fitresult::ToIntEstimator{T},
+                  w::AbstractVector{Int}) where T = T[fitresult.T_given_int[y] for y in w]
 
 
 ## Univariate standardization 
@@ -92,26 +92,26 @@ function fit(transformer::UnivariateStandardizer, v::AbstractVector{T},
 end
 
 # for transforming single value:
-function transform(transformer::UnivariateStandardizer, estimator, x::Real)
-    mu, sigma = estimator
+function transform(transformer::UnivariateStandardizer, fitresult, x::Real)
+    mu, sigma = fitresult
     return (x - mu)/sigma
 end
 
 # for transforming vector:
-transform(transformer::UnivariateStandardizer, estimator,
+transform(transformer::UnivariateStandardizer, fitresult,
           v::AbstractVector{T}) where T <: Real =
-              [transform(transformer, estimator, x) for x in v]
+              [transform(transformer, fitresult, x) for x in v]
 
 # for single values:
-function inverse_transform(transformer::UnivariateStandardizer, estimator, y::Real)
-    mu, sigma = estimator
+function inverse_transform(transformer::UnivariateStandardizer, fitresult, y::Real)
+    mu, sigma = fitresult
     return mu + y*sigma
 end
 
 # for vectors:
-inverse_transform(transformer::UnivariateStandardizer, estimator,
+inverse_transform(transformer::UnivariateStandardizer, fitresult,
                   w::AbstractVector{T}) where T <: Real =
-                      [inverse_transform(transformer, estimator, y) for y in w]
+                      [inverse_transform(transformer, fitresult, y) for y in w]
 
 
 ## Standardization of ordinal features of a DataFrame
@@ -124,12 +124,12 @@ end
 Standardizer(; features=Symbol[]) = Standardizer(features)
 
 struct StandardizerEstimator <: MLJType
-    estimators::Matrix{Float64}
+    fitresults::Matrix{Float64}
     features::Vector{Symbol} # all the feature labels of the data frame fitted
     is_transformed::Vector{Bool}
 end
 
-# null estimator:
+# null fitresult:
 StandardizerEstimator() = StandardizerEstimator(zeros(0,0), Symbol[], Bool[])
 
 function fit(transformer::Standardizer, X, state, verbosity)
@@ -146,35 +146,35 @@ function fit(transformer::Standardizer, X, state, verbosity)
     end
 
     # fit each of those features
-    estimators = Array{Float64}(undef, 2, size(X, 2))
+    fitresults = Array{Float64}(undef, 2, size(X, 2))
     verbosity < 1 || @info "Features standarized: "
     univ_transformer = UnivariateStandardizer()
     for j in 1:size(X, 2)
         if is_transformed[j]
-            estimators[:,j] = [fit(univ_transformer, collect(X[j]), true, verbosity - 1)...]
+            fitresults[:,j] = [fit(univ_transformer, collect(X[j]), true, verbosity - 1)...]
             verbosity < 1 ||
-                @info "  :$(names(X)[j])    mu=$(estimators[1,j])  sigma=$(estimators[2,j])"
+                @info "  :$(names(X)[j])    mu=$(fitresults[1,j])  sigma=$(fitresults[2,j])"
         else
-            estimators[:,j] = Float64[0.0, 0.0]
+            fitresults[:,j] = Float64[0.0, 0.0]
         end
     end
 
-    return StandardizerEstimator(estimators, names(X), is_transformed)
+    return StandardizerEstimator(fitresults, names(X), is_transformed)
     
 end
 
-function transform(transformer::Standardizer, estimator, X)
+function transform(transformer::Standardizer, fitresult, X)
 
-    names(X) == estimator.features ||
+    names(X) == fitresult.features ||
         error("Attempting to transform data frame with incompatible feature labels.")
 
     Xnew = X[1:end,:] # make a copy of X, working even for `SubDataFrames`
     univ_transformer = UnivariateStandardizer()
     for j in 1:size(X, 2)
-        if estimator.is_transformed[j]
+        if fitresult.is_transformed[j]
             # extract the (mu, sigma) pair:
-            univ_estimator = (estimator.estimators[1,j], estimator.estimators[2,j])  
-            Xnew[j] = transform(univ_transformer, univ_estimator, collect(X[j]))
+            univ_fitresult = (fitresult.fitresults[1,j], fitresult.fitresults[2,j])  
+            Xnew[j] = transform(univ_transformer, univ_fitresult, collect(X[j]))
         end
     end
     return Xnew
@@ -249,21 +249,21 @@ function fit(transformer::OneHotEncoder, X::AbstractDataFrame, state, verbosity)
     
 end
 
-function transform(transformer::OneHotEncoder, estimator, X::AbstractDataFrame)
+function transform(transformer::OneHotEncoder, fitresult, X::AbstractDataFrame)
 
-    Set(names(X)) == Set(estimator.features) ||
+    Set(names(X)) == Set(fitresult.features) ||
         error("Attempting to transform DataFrame with incompatible feature labels.")
 
     # todo: check matching eltypes
     
     Xout = DataFrame()
-    for ft in estimator.features
+    for ft in fitresult.features
         if !(eltype(X[ft]) <: AbstractFloat)
-            for value in estimator.values_given_feature[ft]
+            for value in fitresult.values_given_feature[ft]
                 subft = Symbol(string(ft,"__",value))
 
                 # in case subft is not a new feature name:
-                while subft in estimator.features
+                while subft in fitresult.features
                     subft = Symbol(string(subft,"_"))
                 end
 
@@ -382,13 +382,13 @@ function fit(transformer::UnivariateBoxCoxTransformer, v::AbstractVector{T},
 end
 
 # for X scalar or vector:
-transform(transformer::UnivariateBoxCoxTransformer, estimator, X) =
-    boxcox(estimator..., X)
+transform(transformer::UnivariateBoxCoxTransformer, fitresult, X) =
+    boxcox(fitresult..., X)
 
 # scalar case:
 function inverse_transform(transformer::UnivariateBoxCoxTransformer,
-                           estimator, x::Real)
-    lambda, c = estimator
+                           fitresult, x::Real)
+    lambda, c = fitresult
     if lambda == 0
         return exp(x) - c
     else
@@ -398,8 +398,8 @@ end
 
 # vector case:
 function inverse_transform(transformer::UnivariateBoxCoxTransformer,
-                           estimator, w::AbstractVector{T}) where T <: Real
-    return [inverse_transform(transformer, estimator, y) for y in w]
+                           fitresult, w::AbstractVector{T}) where T <: Real
+    return [inverse_transform(transformer, fitresult, y) for y in w]
 end
 
 
@@ -449,12 +449,12 @@ BoxCoxTransformer(; n=171, shift = false, features=Symbol[]) =
     BoxCoxTransformer(n, shift, features)
 
 struct BoxCoxTransformerEstimator <: MLJType
-    estimators::Matrix{Float64} # each col is a [lambda, c]' pair; one col per feature
+    fitresults::Matrix{Float64} # each col is a [lambda, c]' pair; one col per feature
     features::Vector{Symbol} # all features in the dataframe that was fit
     feature_is_transformed::Vector{Bool} # keep track of which features are transformed
 end
 
-# null estimator:
+# null fitresult:
 BoxCoxTransformerEstimator() = BoxCoxTransformerEstimator(zeros(0,0),Symbol[],Bool[])
 
 function fit(transformer::BoxCoxTransformer, X, state, verbosity)
@@ -474,7 +474,7 @@ function fit(transformer::BoxCoxTransformer, X, state, verbosity)
     end
 
     # fit each of those features with best Box Cox transformation
-    estimators = Array{Float64}(undef, 2, size(X,2))
+    fitresults = Array{Float64}(undef, 2, size(X,2))
     univ_transformer = UnivariateBoxCoxTransformer(shift=transformer.shift,
                                                n=transformer.n)
     verbosity < 2 ||
@@ -486,7 +486,7 @@ function fit(transformer::BoxCoxTransformer, X, state, verbosity)
                     @info "  :$(names(X)[j])    "*
                             "(*not* transformed, contains zero values)"
                 feature_is_transformed[j] = false
-                estimators[:,j] = [0.0, 0.0]
+                fitresults[:,j] = [0.0, 0.0]
             else
                 n_values = length(unique(X[j]))
                 if n_values < N_VALUES_THRESH
@@ -494,7 +494,7 @@ function fit(transformer::BoxCoxTransformer, X, state, verbosity)
                         @info "  :$(names(X)[j])    "*
                                 "(*not* transformed, less than $N_VALUES_THRESH values)"
                     feature_is_transformed[j] = false
-                    estimators[:,j] = [0.0, 0.0]
+                    fitresults[:,j] = [0.0, 0.0]
                 else
                     lambda, c = fit(univ_transformer, collect(X[j]), true, verbosity-1)
                     if lambda in [-0.4, 3]
@@ -502,15 +502,15 @@ function fit(transformer::BoxCoxTransformer, X, state, verbosity)
                             @info "  :$(names(X)[j])    "*
                                     "(*not* transformed, lambda too extreme)"
                         feature_is_transformed[j] = false
-                        estimators[:,j] = [0.0, 0.0]
+                        fitresults[:,j] = [0.0, 0.0]
                     elseif lambda == 1.0
                         verbosity < 2 ||
                             @info "  :$(names(X)[j])    "*
                                     "(*not* transformed, not skewed)"
                         feature_is_transformed[j] = false
-                        estimators[:,j] = [0.0, 0.0]
+                        fitresults[:,j] = [0.0, 0.0]
                     else
-                        estimators[:,j] = [lambda, c]
+                        fitresults[:,j] = [lambda, c]
                         verbosity <1 ||
                             @info "  :$(names(X)[j])    lambda=$lambda  "*
                                     "shift=$c"
@@ -518,7 +518,7 @@ function fit(transformer::BoxCoxTransformer, X, state, verbosity)
                 end
             end
         else
-            estimators[:,j] = [0.0, 0.0]
+            fitresults[:,j] = [0.0, 0.0]
         end
     end
 
@@ -526,13 +526,13 @@ function fit(transformer::BoxCoxTransformer, X, state, verbosity)
         @info "To transform non-negative features with zero values use shift=true."
     end
 
-    return BoxCoxTransformerEstimator(estimators, names(X), feature_is_transformed)
+    return BoxCoxTransformerEstimator(fitresults, names(X), feature_is_transformed)
 
 end
 
-function transform(transformer::BoxCoxTransformer, estimator, X::AbstractDataFrame)
+function transform(transformer::BoxCoxTransformer, fitresult, X::AbstractDataFrame)
 
-    names(X) == estimator.features ||
+    names(X) == fitresult.features ||
         error("Attempting to transform a data frame with  "*
               "incompatible feature labels.")
     
@@ -541,15 +541,15 @@ function transform(transformer::BoxCoxTransformer, estimator, X::AbstractDataFra
 
     Xnew = X[1:end,:] # make a copy of X
     for j in 1:size(X, 2)
-        if estimator.feature_is_transformed[j]
+        if fitresult.feature_is_transformed[j]
             try
                 # extract the (lambda, c) pair:
-                univ_estimator = (estimator.estimators[1,j], estimator.estimators[2,j])  
+                univ_fitresult = (fitresult.fitresults[1,j], fitresult.fitresults[2,j])  
 
-                Xnew[j] = transform(univ_transformer, univ_estimator, collect(X[j]))
+                Xnew[j] = transform(univ_transformer, univ_fitresult, collect(X[j]))
             catch DomainError
                 @warn "Data outside of the domain of the fitted Box-Cox"*
-                      " transformation estimator encountered in feature "*
+                      " transformation fitresult encountered in feature "*
                       "$(names(df)[j]). Transformed to zero."
             end
         end
@@ -615,7 +615,7 @@ function fit(transformer::DataFrameToArrayTransformer, X::AbstractDataFrame, sta
         boxcox = fit(boxcox_transformer, X, true, verbosity - 1)
         X = transform(boxcox_transformer, boxcox, X)
     else
-        boxcox = BoxCoxTransformerEstimator() # null estimator
+        boxcox = BoxCoxTransformerEstimator() # null fitresult
     end
 
     if transformer.standardize
@@ -624,7 +624,7 @@ function fit(transformer::DataFrameToArrayTransformer, X::AbstractDataFrame, sta
         stand = fit(standardizer, X, true, verbosity - 1)
         X = transform(standardizer, stand, X)
     else
-        stand = StandardizerEstimator() # null estimator
+        stand = StandardizerEstimator() # null fitresult
     end
     
     verbosity < 1 || @info "Determining one-hot encodings for data frame categoricals."
@@ -636,22 +636,22 @@ function fit(transformer::DataFrameToArrayTransformer, X::AbstractDataFrame, sta
 
 end
 
-function transform(transformer::DataFrameToArrayTransformer, estimator_X, X::AbstractDataFrame)
-    issubset(Set(estimator_X.features), Set(names(X))) ||
+function transform(transformer::DataFrameToArrayTransformer, fitresult_X, X::AbstractDataFrame)
+    issubset(Set(fitresult_X.features), Set(names(X))) ||
         error("DataFrame feature incompatibility encountered.")
-    X = X[estimator_X.features]
+    X = X[fitresult_X.features]
 
     if transformer.boxcox
         boxcox_transformer = BoxCoxTransformer(shift=transformer.shift)
-        X = transform(boxcox_transformer, estimator_X.boxcox, X)
+        X = transform(boxcox_transformer, fitresult_X.boxcox, X)
     end
 
     if transformer.standardize
-        X = transform(Standardizer(), estimator_X.stand, X)
+        X = transform(Standardizer(), fitresult_X.stand, X)
     end
     
     hot_transformer = OneHotEncoder(drop_last=transformer.drop_last)
-    X = transform(hot_transformer, estimator_X.hot, X)
+    X = transform(hot_transformer, fitresult_X.hot, X)
     return convert(Array{Float64}, X)
 end
 
@@ -694,38 +694,38 @@ function fit(transformer::RegressionTargetTransformer, y, state, verbosity)
         boxcox = fit(boxcox_transformer, y, true, verbosity - 1)
         y = transform(boxcox_transformer, boxcox, y)
     else
-        boxcox = (0.0, 0.0) # null estimator
+        boxcox = (0.0, 0.0) # null fitresult
     end
     if transformer.standardize
         verbosity < 1 || @info "Computing target standardization."
         standard_transformer = UnivariateStandardizer()
         standard = fit(standard_transformer, y, true, verbosity - 1)
     else
-        standard = (0.0, 1.0) # null estimator
+        standard = (0.0, 1.0) # null fitresult
     end
     return Estimator_y(boxcox, standard)
 end 
 
-function transform(transformer::RegressionTargetTransformer, estimator_y, y)
+function transform(transformer::RegressionTargetTransformer, fitresult_y, y)
     if transformer.boxcox
         boxcox_transformer = UnivariateBoxCoxTransformer(shift=transformer.shift)
-        y = transform(boxcox_transformer, estimator_y.boxcox, y)
+        y = transform(boxcox_transformer, fitresult_y.boxcox, y)
     end
     if transformer.standardize
         standard_transformer = UnivariateStandardizer()
-        y = transform(standard_transformer, estimator_y.standard, y)
+        y = transform(standard_transformer, fitresult_y.standard, y)
     end 
     return y
 end 
 
-function inverse_transform(transformer::RegressionTargetTransformer, estimator_y, y)
+function inverse_transform(transformer::RegressionTargetTransformer, fitresult_y, y)
     if transformer.standardize
         standard_transformer = UnivariateStandardizer()
-        y = inverse_transform(standard_transformer, estimator_y.standard, y)
+        y = inverse_transform(standard_transformer, fitresult_y.standard, y)
     end
     if transformer.boxcox
         boxcox_transformer = UnivariateBoxCoxTransformer(shift=transformer.shift)
-        y = inverse_transform(boxcox_transformer, estimator_y.boxcox, y)
+        y = inverse_transform(boxcox_transformer, fitresult_y.boxcox, y)
     end
     return y
 end
@@ -742,13 +742,13 @@ MakeCategoricalsIntTransformer(; initial_label=1, sorted=false) = MakeCategorica
 
 struct MakeCategoricalsIntEstimator <: MLJType
     categorical_features::Vector{Symbol}
-    estimators::Vector{ToIntEstimator}
+    fitresults::Vector{ToIntEstimator}
     to_int_transformer::ToIntTransformer
 end
 
 function fit(transformer::MakeCategoricalsIntTransformer, X::AbstractDataFrame, state, verbosity)
     categorical_features = Symbol[]
-    estimators = ToIntEstimator[]
+    fitresults = ToIntEstimator[]
     to_int_transformer = ToIntTransformer(sorted=transformer.sorted,
                                           initial_label=transformer.initial_label)
     types = eltypes(X)
@@ -756,18 +756,18 @@ function fit(transformer::MakeCategoricalsIntTransformer, X::AbstractDataFrame, 
     for j in eachindex(types)
         if !(types[j] <: AbstractFloat)
             push!(categorical_features, features[j])
-            push!(estimators, fit(to_int_transformer, X[j], state, verbosity))
+            push!(fitresults, fit(to_int_transformer, X[j], state, verbosity))
         end
     end
     verbosity < 1 || @info "Input features treated as categorical: $categorical_features"
-    return MakeCategoricalsIntEstimator(categorical_features, estimators, to_int_transformer)
+    return MakeCategoricalsIntEstimator(categorical_features, fitresults, to_int_transformer)
 end
 
-function transform(transformer::MakeCategoricalsIntTransformer, estimator_X, X::AbstractDataFrame)
+function transform(transformer::MakeCategoricalsIntTransformer, fitresult_X, X::AbstractDataFrame)
     Xt = X[1:end,:] # make a copy of X, working even for `SubDataFrame`s
-    for j in eachindex(estimator_X.categorical_features)
-        ftr = estimator_X.categorical_features[j]
-        Xt[ftr] = transform(estimator_X.to_int_transformer, estimator_X.estimators[j], X[ftr])
+    for j in eachindex(fitresult_X.categorical_features)
+        ftr = fitresult_X.categorical_features[j]
+        Xt[ftr] = transform(fitresult_X.to_int_transformer, fitresult_X.fitresults[j], X[ftr])
     end
     return Xt
 end
@@ -821,9 +821,9 @@ function fit(transformer::UnivariateDiscretizer, v, state, verbosity)
 end
 
 # transforming scalars:
-function transform(transformer::UnivariateDiscretizer, estimator, r::Real)
+function transform(transformer::UnivariateDiscretizer, fitresult, r::Real)
     k = 1
-    for level in estimator.odd_quantiles
+    for level in fitresult.odd_quantiles
         if r > level
             k = k + 1
         end
@@ -832,26 +832,26 @@ function transform(transformer::UnivariateDiscretizer, estimator, r::Real)
 end
 
 # transforming vectors:
-function transform(transformer::UnivariateDiscretizer, estimator,
+function transform(transformer::UnivariateDiscretizer, fitresult,
                    v::AbstractVector{T}) where T<:Real
-    return [transform(transformer, estimator, r) for r in v]
+    return [transform(transformer, fitresult, r) for r in v]
 end
 
 # scalars:
-function inverse_transform(transformer::UnivariateDiscretizer, estimator, k::Int)
-    n_classes = length(estimator.even_quantiles)
+function inverse_transform(transformer::UnivariateDiscretizer, fitresult, k::Int)
+    n_classes = length(fitresult.even_quantiles)
     if k < 1
-        return estimator.even_quantiles[1]
+        return fitresult.even_quantiles[1]
     elseif k > n_classes
-        return estimator.even_quantiles[n_classes]
+        return fitresult.even_quantiles[n_classes]
     end
-    return estimator.even_quantiles[k]
+    return fitresult.even_quantiles[k]
 end
 
 # vectors:
-function inverse_transform(transformer::UnivariateDiscretizer, estimator,
+function inverse_transform(transformer::UnivariateDiscretizer, fitresult,
                            w::AbstractVector{T}) where T<:Integer
-    return [inverse_transform(transformer, estimator, k) for k in w]
+    return [inverse_transform(transformer, fitresult, k) for k in w]
 end
 
 
@@ -862,7 +862,7 @@ end
 
 fit(transformer::IntegerToInt64Transformer, X, state, verbosity) = nothing
 
-transform(transformer::IntegerToInt64Transformer, estimator, X) = Int64[X...]
+transform(transformer::IntegerToInt64Transformer, fitresult, X) = Int64[X...]
 
 
 ## DISCRETIZING ALL COLUMNS OF A DATAFRAME
@@ -902,7 +902,7 @@ discretized using a `UnivariateDiscretizer` transformer. All remaining
 eltypes are treated as nominal, with elements relabeled with integers,
 starting with 1; nominal values not encountered during fitting the
 transformer will throw a `KeyError` if there is an attempt to
-transform them according to the fitted estimator.
+transform them according to the fitted fitresult.
 
 """
 mutable struct Discretizer <: Transformer
@@ -951,20 +951,20 @@ function fit(transformer::Discretizer, X::AbstractDataFrame, state, verbosity)
     
 end
 
-function transform(transformer::Discretizer, estimator, X)
+function transform(transformer::Discretizer, fitresult, X)
 
-    issubset(Set(estimator.features), Set(names(X))) ||
+    issubset(Set(fitresult.features), Set(names(X))) ||
         error("Provided DataFrame with incompatible features.")
 
-    n_features = length(estimator.features)
+    n_features = length(fitresult.features)
     A = Array{Int}(undef, size(X, 1), n_features)
 
     for j in 1:n_features
-        A[:,j] = transform(estimator.transformer_machines[j],
-                           X[:,estimator.features[j]])
+        A[:,j] = transform(fitresult.transformer_machines[j],
+                           X[:,fitresult.features[j]])
     end
 
-    return NominalOrdinalIntArray(A, estimator.features, estimator.is_ordinal)
+    return NominalOrdinalIntArray(A, fitresult.features, fitresult.is_ordinal)
 
 end
             

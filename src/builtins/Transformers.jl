@@ -37,7 +37,7 @@ struct ToIntEstimator{T} <: MLJType
     T_given_int::Dict{Int, T}
 end
 
-# null estimator constructor:
+# null fitresult constructor:
 ToIntEstimator(S::Type{T}) where T =
     ToIntEstimator{T}(0, Dict{T, Int}(), Dict{Int, T}())
 
@@ -64,20 +64,20 @@ function fit(transformer::ToIntTransformer
         i = i + 1
     end
 
-    estimator = ToIntEstimator{T}(n_levels, int_given_T, T_given_int)
-    state = estimator
+    fitresult = ToIntEstimator{T}(n_levels, int_given_T, T_given_int)
+    state = fitresult
     report = Dict{Symbol,Any}()
     report[:values] = vals
 
-    return estimator, state, report
+    return fitresult, state, report
 
 end
 
 # scalar case:
-function transform(transformer::ToIntTransformer, estimator::ToIntEstimator{T}, x::T) where T
+function transform(transformer::ToIntTransformer, fitresult::ToIntEstimator{T}, x::T) where T
     ret = 0 # otherwise ret below stays in local scope
     try 
-        ret = estimator.int_given_T[x]
+        ret = fitresult.int_given_T[x]
     catch exception
         if isa(exception, KeyError)
             if transformer.map_unseen_to_minus_one 
@@ -89,16 +89,16 @@ function transform(transformer::ToIntTransformer, estimator::ToIntEstimator{T}, 
     end
     return ret
 end 
-inverse_transform(transformer::ToIntTransformer, estimator, y::Int) =
-    estimator.T_given_int[y]
+inverse_transform(transformer::ToIntTransformer, fitresult, y::Int) =
+    fitresult.T_given_int[y]
 
 # vector case:
-function transform(transformer::ToIntTransformer, estimator::ToIntEstimator{T},
+function transform(transformer::ToIntTransformer, fitresult::ToIntEstimator{T},
                    v::AbstractVector{T}) where T
-    return Int[transform(transformer, estimator, x) for x in v]
+    return Int[transform(transformer, fitresult, x) for x in v]
 end
-inverse_transform(transformer::ToIntTransformer, estimator::ToIntEstimator{T},
-                  w::AbstractVector{Int}) where T = T[estimator.T_given_int[y] for y in w]
+inverse_transform(transformer::ToIntTransformer, fitresult::ToIntEstimator{T},
+                  w::AbstractVector{Int}) where T = T[fitresult.T_given_int[y] for y in w]
 
 
 ## UNIVARIATE STANDARDIZATION
@@ -110,37 +110,37 @@ function fit(transformer::UnivariateStandardizer, v::AbstractVector{T},
              state, verbosity) where T <: Real
     std(v) > eps(Float64) || 
         @warn "Extremely small standard deviation encountered in standardization."
-    estimator = (mean(v), std(v))
-    state = estimator
+    fitresult = (mean(v), std(v))
+    state = fitresult
     report = nothing
-    return estimator, state, report
+    return fitresult, state, report
 end
 
 # for transforming single value:
-function transform(transformer::UnivariateStandardizer, estimator, x::Real)
-    mu, sigma = estimator
+function transform(transformer::UnivariateStandardizer, fitresult, x::Real)
+    mu, sigma = fitresult
     return (x - mu)/sigma
 end
 
 # for transforming vector:
-transform(transformer::UnivariateStandardizer, estimator,
+transform(transformer::UnivariateStandardizer, fitresult,
           v) =
-              [transform(transformer, estimator, x) for x in v]
+              [transform(transformer, fitresult, x) for x in v]
 
 # for single values:
-function inverse_transform(transformer::UnivariateStandardizer, estimator, y::Real)
-    mu, sigma = estimator
+function inverse_transform(transformer::UnivariateStandardizer, fitresult, y::Real)
+    mu, sigma = fitresult
     return mu + y*sigma
 end
 
 # for vectors:
-inverse_transform(transformer::UnivariateStandardizer, estimator, w) =
-    [inverse_transform(transformer, estimator, y) for y in w]
+inverse_transform(transformer::UnivariateStandardizer, fitresult, w) =
+    [inverse_transform(transformer, fitresult, y) for y in w]
 
 
 ## STANDARDIZATION OF ORDINAL FEATURES OF A DATAFRAME
 
-# TODO: reimplement in simpler, safer way: estimator is two vectors:
+# TODO: reimplement in simpler, safer way: fitresult is two vectors:
 # one of features that are transformed, one of corresponding
 # univariate trainable models.
 
@@ -153,12 +153,12 @@ end
 Standardizer(; features=Symbol[]) = Standardizer(features)
 
 struct StandardizerEstimator <: MLJType
-    estimators::Matrix{Float64}
+    fitresults::Matrix{Float64}
     features::Vector{Symbol} # all the feature labels of the data frame fitted
     is_transformed::Vector{Bool}
 end
 
-# null estimator:
+# null fitresult:
 StandardizerEstimator() = StandardizerEstimator(zeros(0,0), Symbol[], Bool[])
 
 function fit(transformer::Standardizer, X, state, verbosity)
@@ -177,41 +177,41 @@ function fit(transformer::Standardizer, X, state, verbosity)
     end
 
     # fit each of those features
-    estimators = Array{Float64}(undef, 2, size(X, 2))
+    fitresults = Array{Float64}(undef, 2, size(X, 2))
     verbosity < 1 || @info "Features standarized: "
     for j in 1:size(X, 2)
         if is_transformed[j]
-            estimator, state, report =
+            fitresult, state, report =
                 fit(UnivariateStandardizer(), collect(X[j]), nothing, verbosity - 1)
-            estimators[:,j] = [estimator...]
+            fitresults[:,j] = [fitresult...]
             verbosity < 1 ||
-                @info "  :$(features[j])    mu=$(estimators[1,j])  sigma=$(estimators[2,j])"
+                @info "  :$(features[j])    mu=$(fitresults[1,j])  sigma=$(fitresults[2,j])"
         else
-            estimators[:,j] = Float64[0.0, 0.0]
+            fitresults[:,j] = Float64[0.0, 0.0]
         end
     end
     
-    estimator = StandardizerEstimator(estimators, features, is_transformed)
-    state = estimator
+    fitresult = StandardizerEstimator(fitresults, features, is_transformed)
+    state = fitresult
     report = Dict{Symbol,Any}()
     report[:features_transformed]=[features[is_transformed]]
     
-    return estimator, state, report
+    return fitresult, state, report
     
 end
 
-function transform(transformer::Standardizer, estimator, X)
+function transform(transformer::Standardizer, fitresult, X)
 
-    names(X) == estimator.features ||
+    names(X) == fitresult.features ||
         error("Attempting to transform data frame with incompatible feature labels.")
 
     Xnew = X[1:end,:] # make a copy of X, working even for `SubDataFrames`
     univ_transformer = UnivariateStandardizer()
     for j in 1:size(X, 2)
-        if estimator.is_transformed[j]
+        if fitresult.is_transformed[j]
             # extract the (mu, sigma) pair:
-            univ_estimator = (estimator.estimators[1,j], estimator.estimators[2,j])  
-            Xnew[j] = transform(univ_transformer, univ_estimator, collect(X[j]))
+            univ_fitresult = (fitresult.fitresults[1,j], fitresult.fitresults[2,j])  
+            Xnew[j] = transform(univ_transformer, univ_fitresult, collect(X[j]))
         end
     end
     return Xnew

@@ -48,11 +48,11 @@ function fit(model::KNNRegressor
              , verbosity) 
     
     # computing norms of rows later on is faster if we use the transpose of X:
-    estimator = (X', y)
-    state = estimator
+    fitresult = (X', y)
+    state = fitresult
     report = nothing
     
-    return estimator, state, report 
+    return fitresult, state, report 
 end
 
 first_component_is_less_than(v, w) = isless(v[1], w[1])
@@ -76,16 +76,16 @@ function distances_and_indices_of_closest(K, metric, Xtrain, pattern)
     
 end
 
-function predict_on_pattern(model, estimator, pattern)
-    Xtrain, ytrain = estimator[1], estimator[2]
+function predict_on_pattern(model, fitresult, pattern)
+    Xtrain, ytrain = fitresult[1], fitresult[2]
     distances, indices = distances_and_indices_of_closest(model.K, model.metric, Xtrain, pattern)
     wts = [model.kernel(d) for d in distances]
     wts = wts/sum(wts)
     return sum(wts .* ytrain[indices])
 end
 
-predict(model::KNNRegressor, estimator, Xnew) =
-    [predict_on_pattern(model, estimator, Xnew[i,:]) for i in 1:size(Xnew,1)]
+predict(model::KNNRegressor, fitresult, Xnew) =
+    [predict_on_pattern(model, fitresult, Xnew[i,:]) for i in 1:size(Xnew,1)]
     
 end # module
 

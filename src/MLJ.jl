@@ -87,7 +87,7 @@ normalization). Or, more technically, the model associated with
 such an algorithm.
 
 
-### estimator 
+### fitresult 
 
 The "weights" or "paramaters" learned by an algorithm using the
 hyperparameters prescribed in an associated model (eg, what a learner
@@ -103,10 +103,10 @@ of methods sharing the same name but different type signatures.)
 ### operator
 
 Data-manipulating operations (methods) parameterized by some
-estimator. For learners, the `predict` or `predict_proba` methods, for
+fitresult. For learners, the `predict` or `predict_proba` methods, for
 transformers, the `transform` or `inverse_transform` method. In some
 contexts such an operator might be replaced by an ordinary operator
-(methods) that do *not* depend on an estimator, which are then then
+(methods) that do *not* depend on an fitresult, which are then then
 called *static* operators for clarity. An operator that is not static
 is *dynamic*.
 
@@ -118,15 +118,15 @@ learner/transformer-specific functions beyond normal training (eg,
 pruning an existing decision tree, optimization weights of an ensemble
 learner). In particular, in the case of iterative learners, state must
 be sufficient to restart the training algorithm (eg, add decision
-trees to a random forest). The estimator may serve as state and should
+trees to a random forest). The fitresult may serve as state and should
 do so by default.
 
 
 ### trainable model
 
-An object consisting of a model wrapped with an estimator, state,
+An object consisting of a model wrapped with an fitresult, state,
 *and* a source for training data. A *source* is either concrete data
-(eg, data frame) or *dynamic data*, as defined below. The estimator
+(eg, data frame) or *dynamic data*, as defined below. The fitresult
 and state are undefined until the model is trained.
 
 A trainable model might also include metadata recording algorithm-specific
@@ -149,7 +149,7 @@ A "trainable" data-like object consisting of:
 
 (4) An **activity flag** used to switch dynamic behaviour on or off.
 
-(5) Metadata tracking the object's dependency on various estimators,
+(5) Metadata tracking the object's dependency on various fitresults,
     as implied by its connections.
 
 
@@ -184,7 +184,7 @@ abstract type Learner <: Model end
 abstract type Transformer <: Model end 
 
 # special learners:
-abstract type Supervised{E} <: Learner end # parameterized by estimator `E`
+abstract type Supervised{E} <: Learner end # parameterized by fitresult `E`
 abstract type Unsupervised{E} <: Learner end
 
 # special supervised learners:
@@ -381,7 +381,7 @@ function inverse_transform end
 
 # fallback method to correct invalid hyperparameters and return
 # a warning (in this case empty):
-clean!(estimator::Model) = "" 
+clean!(fitresult::Model) = "" 
 
 # note: package interfaces define concrete `Model` types, the
 # users' "basement level" abstractions.
@@ -417,7 +417,7 @@ end
 mutable struct TrainableModel{B<:Model} <: MLJType
 
     model::B
-    estimator
+    fitresult
     state
     args
     report
@@ -466,7 +466,7 @@ function fit!(trainable::TrainableModel, rows; verbosity=1, kwargs...)
     end
 
     args = (arg[Rows, rows] for arg in trainable.args)
-    trainable.estimator, trainable.state, report =
+    trainable.fitresult, trainable.state, report =
         fit(trainable.model, args..., state, verbosity-1; kwargs...)
 
     if report != nothing
@@ -488,8 +488,8 @@ end
 
 # predict method for learner models:
 function predict(trainable::TrainableModel{L}, X) where L<: Learner 
-    if isdefined(trainable, :estimator)
-        return predict(trainable.model, trainable.estimator, X)
+    if isdefined(trainable, :fitresult)
+        return predict(trainable.model, trainable.fitresult, X)
     else
         throw(error("$trainable with model $(trainable.model) is not trained and so cannot predict."))
     end
@@ -511,16 +511,16 @@ function prefit(model::T, X) where T<:Transformer
 end
 
 function transform(trainable::TrainableModel{T}, X) where T<:Transformer
-    if isdefined(trainable, :estimator)
-        return transform(trainable.model, trainable.estimator, X)
+    if isdefined(trainable, :fitresult)
+        return transform(trainable.model, trainable.fitresult, X)
     else
         throw(error("$trainable with model $(trainable.model) is not trained and so cannot transform."))
     end
 end
 
 function inverse_transform(trainable::TrainableModel{T}, X) where T<:Transformer
-    if isdefined(trainable, :estimator)
-        return inverse_transform(trainable.model, trainable.estimator, X)
+    if isdefined(trainable, :fitresult)
+        return inverse_transform(trainable.model, trainable.fitresult, X)
     else
         throw(error("$trainable with model $(trainable.model) is not trained and so cannot inverse_transform."))
     end
