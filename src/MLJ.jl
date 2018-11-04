@@ -9,7 +9,7 @@ export freeze!, thaw!
 export array
 
 # defined here but extended by files in "interfaces/" (lazily loaded)
-export predict, fit, transform, inverse_transform
+export predict, transform, inverse_transform
 
 # defined in include files:
 export partition, @curve, @pcurve                  # "utilities.jl"
@@ -124,10 +124,10 @@ do so by default.
 
 ### trainable model
 
-An object consisting of a model wrapped with an fitresult, state,
+An object consisting of a model wrapped with an fitresult, cache,
 *and* a source for training data. A *source* is either concrete data
 (eg, data frame) or *dynamic data*, as defined below. The fitresult
-and state are undefined until the model is trained.
+and cache are undefined until the model is trained.
 
 A trainable model might also include metadata recording algorithm-specific
 statistics of training (eg, internal estimate of generalization error)
@@ -381,7 +381,11 @@ function inverse_transform end
 
 # fallback method to correct invalid hyperparameters and return
 # a warning (in this case empty):
-clean!(fitresult::Model) = "" 
+clean!(fitresult::Model) = ""
+
+# fallback method for refitting:
+fit2(model::Model, verbosity, fitresult, cache, args...) =
+    fit(model, verbosity, args...)
 
 # note: package interfaces define concrete `Model` types, the
 # users' "basement level" abstractions.
@@ -418,7 +422,7 @@ mutable struct TrainableModel{B<:Model} <: MLJType
 
     model::B
     fitresult
-    state
+    cache
     args
     report
     tape::Vector{TrainableModel}
@@ -458,24 +462,26 @@ function fit!(trainable::TrainableModel, rows; verbosity=1, kwargs...)
         return trainable
     end
         
-    verbosity < 1 || @info "Training $trainable whose model is $(trainable.model)"
-    if isdefined(trainable, :state)
-        state = trainable.state
-    else
-        state = nothing
-    end
+    verbosity < 1 || @info "Training $trainable whose model is $(trainable.model)."
 
     args = (arg[Rows, rows] for arg in trainable.args)
-    trainable.fitresult, trainable.state, report =
-        fit(trainable.model, args..., state, verbosity-1; kwargs...)
+
+    if !isdefined(trainable, :fitresult)
+        trainable.fitresult, trainable.cache, report =
+            fit(trainable.model, verbosity, args...)
+    else
+        trainable.fitresult, trainable.cache, report =
+        fit2(trainable.model, verbosity, trainable.fitresult, trainable.cache, args...; kwargs...)
+    end
 
     if report != nothing
         merge!(trainable.report, report)
     end
 
-    verbosity <1 || @info "Done."
+#    verbosity <1 || @info "Done."
 
     return trainable
+
 end
 
 
@@ -728,8 +734,9 @@ macro load_interface(pkgname, uuid::String, load_instr)
     end
 end
 
+
 function __init__()
-    @load_interface DecisionTree "7806a523-6efd-50cb-b5f6-3fa6f1930dbb" lazy=true
+    @load_interface DecisionTree "7806a523-6efd-50cb-b5f6-3fa6f1930dbb" lazy=false
 end
 
 end # module

@@ -1,8 +1,18 @@
-# Guide for writing MLJ package intefaces
+# Guide for adding new models to MLJ 
 
-Or a design proposal for the lowest level of the API
+This guide outlines the specification for the lowest level of the MLJ
+application interface. It is is guide for those adding new models by
+(i) writing glue code for lazily loaded external packages (the main
+case); and (ii) writing code that is directly included in MLJ in the
+form of an include file.
+
+A checklist for adding models is given at the end, and a template for
+adding supervised learner models from external packages is at
+["src/interfaces/DecisionTree.jl"](../src/interfaces/DecisionTree.jl)
+
 
 ## Preliminaries
+
 
 ### MLJ types
 
@@ -177,7 +187,10 @@ left to higher levels of the interface to avoid code duplication.
 
 **Hyperparameter checks.** The method `fit` should initially call
 `clean!` on `learner` and issue the returned warning if changes are
-made (the message is non-empty). See the template.
+made (i.e., the message is non-empty). See the template for an
+example. **This is the only time `fit` should alter hyperparameter
+values.** If the package is able to suggest better hyperparameters, as
+part of training, return these in the report field. 
 
 The `verbosity` level (0 for silent) is for passing to the fit method
 of the external package. Package interfaces should generally avoid any
@@ -229,5 +242,45 @@ isiterative(learner::ConcreteModel) = true
 to enable the enhanced iterative method functionality at higher levels
 of the interface.
 
+##  Checklist for new adding models 
 
+At present the checklist is just for supervised learner models in
+lazily loaded external packages.
 
+1. Copy and edit file ["src/DecisionTree.jl"](../src/DecisionTree.jl)
+which is annotated for use as a template. Give your new file a name
+identical to the package name, including ".jl" extension, such as
+"DecisionTree.jl". Put this file in "src/interfaces/".
+
+2. Register your package for lazy loading with MLJ by finding out the
+UUID of the package and adding an appropriate line to the `__init__`
+method at the end of "src/MLJ.jl". It will look something like this:
+
+````julia
+function __init__()
+   @load_interface DecisionTree "7806a523-6efd-50cb-b5f6-3fa6f1930dbb" lazy=true
+   @load_interface NewExternalPackage "893749-98374-9234-91324-1324-9134-98" lazy=true
+end
+````
+
+With `lazy=true`, your glue code only gets loaded by the MLJ user
+after they run 'import NewExternalPackage'. For testing in your local
+MLJ fork, you may want to set `lazy=false` but to use `Revise` you
+will also need to move the `@load_interface` line out outside of the
+`__init__` function. 
+
+3. Write self-contained test-code for the methods defined in your glue
+code, in a file with an identical name, but placed in "test/", eg,
+["test/DecisionTree.jl"](../test/DecisionTree.jl) for an example. This
+code should be wrapped in a module to prevent namespace conflicts with
+other test code. For a module name, just prepend "Test", as in
+"TestDecisionTree". See "test/DecisionTree.jl" for an example. 
+
+4. Add a line to ["test/runtests.jl"](../test/runtests.jl) to
+`include` your test file, for the purpose of testing MLJ core and all
+currently supported packages, including yours. You can Test your code
+by running `test MLJ` from the Julia interactive package manager. You
+will need to `dev` your local MLJ fork first. To test your code in
+isolation, locally edit "test/runtest.jl" appropriately.
+
+4. Make a pull-request to include your working inteface!
