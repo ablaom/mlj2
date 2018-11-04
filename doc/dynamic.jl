@@ -11,7 +11,7 @@ fold1, fold2 = partition(eachindex(y), 0.7) # 70:30 split
 # construct a transformer to standardize the inputs, using the
 # training fold to prevent data leakage:
 scale_ = Standardizer() 
-scale = prefit(scale_, X) 
+scale = Trainable(scale_, X) 
 fit!(scale, fold1)
 
 # get the transformed inputs:
@@ -22,7 +22,7 @@ Xa = array(Xt)
 
 # choose a learner and train it on the same fold:
 knn_ = KNNRegressor(K=7) # just a container for hyperparameters
-knn = prefit(knn_, Xa, y) 
+knn = Trainable(knn_, Xa, y) 
 fit!(knn, fold1)
 
 # get the predictions on the other fold:
@@ -48,7 +48,7 @@ y = dynamic(y)
 
 # construct a transformer to standardize the inputs:
 scale_ = Standardizer() 
-scale = prefit(scale_, X) # no need to train!
+scale = Trainable(scale_, X) # no need to train!
 
 # get the transformed inputs, as if `scale` were already trained:
 Xt = transform(scale, X)
@@ -58,7 +58,7 @@ Xa = array(Xt)
 
 # choose a learner and make it trainable:
 knn_ = KNNRegressor(K=7) 
-knn = prefit(knn_, Xa, y) # no need to train!
+knn = Trainable(knn_, Xa, y) # no need to train!
 
 # get the predictions, as if `knn` already trained:
 yhat = predict(knn, Xa)

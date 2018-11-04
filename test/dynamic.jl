@@ -16,7 +16,7 @@ knn_ = KNNRegressor(K=7)
 allrows = eachindex(y)
 train, valid, test = partition(allrows, 0.7, 0.15)
 @test vcat(train, valid, test) == allrows
-knn1 = prefit(knn_, X, y)
+knn1 = Trainable(knn_, X, y)
 fit!(knn1, train);
 the_error = rms(predict(knn1, X[Rows, test]), y[test])
 
@@ -40,14 +40,14 @@ fold1, fold2 = partition(allrows, 0.7) # 70:30 split
 
 # construct a transformer to standardize the target:
 uscale_ = UnivariateStandardizer()
-@constant uscale = prefit(uscale_, yd)
+@constant uscale = Trainable(uscale_, yd)
 
 # get the transformed inputs, as if `uscale` were already fit:
 @constant z = transform(uscale, yd)
 
 # construct a transformer to standardize the inputs:
 scale_ = Standardizer() 
-@constant scale = prefit(scale_, Xd) # no need to fit
+@constant scale = Trainable(scale_, Xd) # no need to fit
 
 # get the transformed inputs, as if `scale` were already fit:
 @constant Xt = transform(scale, Xd)
@@ -57,7 +57,7 @@ scale_ = Standardizer()
 
 # choose a learner and make it trainable:
 knn_ = KNNRegressor(K=7) # just a container for hyperparameters
-@constant knn = prefit(knn_, Xa, z) # no need to fit
+@constant knn = Trainable(knn_, Xa, z) # no need to fit
 
 # get the predictions, as if `knn` already fit:
 @constant zhat = predict(knn, Xa)

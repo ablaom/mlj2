@@ -4,7 +4,7 @@ export glossary
 export Rows, Cols, Names
 export features, X_and_y
 export rms, rmsl, rmslp1, rmsp
-export TrainableModel, prefit, dynamic, fit!
+export TrainableModel, Trainable, dynamic, fit!
 export freeze!, thaw!
 export array
 
@@ -482,7 +482,7 @@ end
 ## MODEL INTERFACE - SPECIFIC TO SUPERVISED LEARNERS
 
 # users' trainable model constructor for supervised models:
-function prefit(model::S, X, y) where S<:Supervised
+function Trainable(model::S, X, y) where S<:Supervised
     return TrainableModel(model, X, y)
 end
 
@@ -506,7 +506,7 @@ end
 ## MODEL INTERFACE - SPECIFIC TO TRANSFORMERS
 
 # users' trainable model constructor for transformers:
-function prefit(model::T, X) where T<:Transformer
+function Trainable(model::T, X) where T<:Transformer
     return TrainableModel(model, X)
 end
 
