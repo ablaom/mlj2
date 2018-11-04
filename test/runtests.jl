@@ -22,6 +22,6 @@ v = [1,2,3,4];
 
 include("KNN.jl")
 # include("dynamic.jl")
-# include("Transformer.jl")
+include("Transformer.jl")
 include("DecisionTree.jl")
 

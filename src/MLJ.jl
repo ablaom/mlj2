@@ -304,11 +304,13 @@ end
 struct Rows end
 struct Cols end
 struct Names end
+struct Eltypes end
 struct Echo end # needed to terminate calls of dynamic data types on unseen source data
 
 Base.getindex(df::AbstractDataFrame, ::Type{Rows}, r) = df[r,:]
 Base.getindex(df::AbstractDataFrame, ::Type{Cols}, c) = df[c]
 Base.getindex(df::AbstractDataFrame, ::Type{Names}) = names(df)
+Base.getindex(df::AbstractDataFrame, ::Type{Eltypes}) = eltypes(df)
 Base.getindex(df::AbstractDataFrame, ::Type{Echo}, dg) = dg
 
 # Base.getindex(df::JuliaDB.Table, ::Type{Rows}, r) = df[r]
@@ -316,10 +318,11 @@ Base.getindex(df::AbstractDataFrame, ::Type{Echo}, dg) = dg
 # Base.getindex(df::JuliaDB.Table, ::Type{Names}) = getfields(typeof(df.columns.columns))
 # Base.getindex(df::JuliaDB.Table, ::Type{Echo}, dg) = dg
 
-Base.getindex(A::AbstractArray, ::Type{Rows}, r) = A[r,:]
-Base.getindex(A::AbstractArray, ::Type{Cols}, c) = A[:,c]
-Base.getindex(A::AbstractArray, ::Type{Names}) = 1:size(A, 2)
-Base.getindex(A::AbstractArray, ::Type{Echo}, B) = B
+Base.getindex(A::AbstractMatrix, ::Type{Rows}, r) = A[r,:]
+Base.getindex(A::AbstractMatrix, ::Type{Cols}, c) = A[:,c]
+Base.getindex(A::AbstractMatrix, ::Type{Names}) = 1:size(A, 2)
+Base.getindex(A::AbstractMatrix{T}, ::Type{Eltypes}) where T = [T for j in 1:size(A, 2)]
+Base.getindex(A::AbstractMatrix, ::Type{Echo}, B) = B
 
 Base.getindex(v::AbstractVector, ::Type{Rows}, r) = v[r]
 Base.getindex(v::AbstractVector, ::Type{Echo}, w) = w

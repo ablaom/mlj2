@@ -31,20 +31,19 @@ ToIntTransformer(; sorted=true, initial_label=1
                      ToIntTransformer(sorted, initial_label,
                                       map_unseen_to_minus_one)
 
-struct ToIntEstimator{T} <: MLJType
+struct ToIntFitResult{T} <: MLJType
     n_levels::Int
     int_given_T::Dict{T, Int}
     T_given_int::Dict{Int, T}
 end
 
 # null fitresult constructor:
-ToIntEstimator(S::Type{T}) where T =
-    ToIntEstimator{T}(0, Dict{T, Int}(), Dict{Int, T}())
+ToIntFitResult(S::Type{T}) where T =
+    ToIntFitResult{T}(0, Dict{T, Int}(), Dict{Int, T}())
 
 function fit(transformer::ToIntTransformer
-             , v::AbstractVector{T}
-             , state
-             , verbosity) where T
+             , verbosity::Int 
+             , v::AbstractVector{T}) where T
 
     int_given_T = Dict{T, Int}()
     T_given_int = Dict{Int, T}()
@@ -64,17 +63,17 @@ function fit(transformer::ToIntTransformer
         i = i + 1
     end
 
-    fitresult = ToIntEstimator{T}(n_levels, int_given_T, T_given_int)
-    state = fitresult
+    fitresult = ToIntFitResult{T}(n_levels, int_given_T, T_given_int)
+    cache = nothing
     report = Dict{Symbol,Any}()
     report[:values] = vals
 
-    return fitresult, state, report
+    return fitresult, cache, report
 
 end
 
 # scalar case:
-function transform(transformer::ToIntTransformer, fitresult::ToIntEstimator{T}, x::T) where T
+function transform(transformer::ToIntTransformer, fitresult::ToIntFitResult{T}, x::T) where T
     ret = 0 # otherwise ret below stays in local scope
     try 
         ret = fitresult.int_given_T[x]
@@ -93,11 +92,11 @@ inverse_transform(transformer::ToIntTransformer, fitresult, y::Int) =
     fitresult.T_given_int[y]
 
 # vector case:
-function transform(transformer::ToIntTransformer, fitresult::ToIntEstimator{T},
+function transform(transformer::ToIntTransformer, fitresult::ToIntFitResult{T},
                    v::AbstractVector{T}) where T
     return Int[transform(transformer, fitresult, x) for x in v]
 end
-inverse_transform(transformer::ToIntTransformer, fitresult::ToIntEstimator{T},
+inverse_transform(transformer::ToIntTransformer, fitresult::ToIntFitResult{T},
                   w::AbstractVector{Int}) where T = T[fitresult.T_given_int[y] for y in w]
 
 
@@ -106,14 +105,13 @@ inverse_transform(transformer::ToIntTransformer, fitresult::ToIntEstimator{T},
 mutable struct UnivariateStandardizer <: Transformer
 end
 
-function fit(transformer::UnivariateStandardizer, v::AbstractVector{T}, 
-             state, verbosity) where T <: Real
+function fit(transformer::UnivariateStandardizer, verbosity, v::AbstractVector{T}) where T<:Real
     std(v) > eps(Float64) || 
         @warn "Extremely small standard deviation encountered in standardization."
     fitresult = (mean(v), std(v))
-    state = fitresult
+    cache = nothing
     report = nothing
-    return fitresult, state, report
+    return fitresult, cache, report
 end
 
 # for transforming single value:
@@ -142,9 +140,9 @@ inverse_transform(transformer::UnivariateStandardizer, fitresult, w) =
 
 # TODO: reimplement in simpler, safer way: fitresult is two vectors:
 # one of features that are transformed, one of corresponding
-# univariate trainable models.
+# univariate trainable models. Make data container agnostic.
 
-""" Standardizers the columns of eltype <: AbstractFloat unless non-empty `features` specfied."""
+""" Standardizes the columns of eltype <: AbstractFloat unless non-empty `features` specfied."""
 mutable struct Standardizer <: Transformer
     features::Vector{Symbol} # features to be standardized; empty means all of
 end
@@ -152,16 +150,16 @@ end
 # lazy keyword constructor:
 Standardizer(; features=Symbol[]) = Standardizer(features)
 
-struct StandardizerEstimator <: MLJType
+struct StandardizerFitResult <: MLJType
     fitresults::Matrix{Float64}
     features::Vector{Symbol} # all the feature labels of the data frame fitted
     is_transformed::Vector{Bool}
 end
 
 # null fitresult:
-StandardizerEstimator() = StandardizerEstimator(zeros(0,0), Symbol[], Bool[])
+StandardizerFitResult() = StandardizerFitResult(zeros(0,0), Symbol[], Bool[])
 
-function fit(transformer::Standardizer, X, state, verbosity)
+function fit(transformer::Standardizer, verbosity::Int, X::DataFrame)
 
     features = names(X)
     
@@ -181,22 +179,22 @@ function fit(transformer::Standardizer, X, state, verbosity)
     verbosity < 1 || @info "Features standarized: "
     for j in 1:size(X, 2)
         if is_transformed[j]
-            fitresult, state, report =
-                fit(UnivariateStandardizer(), collect(X[j]), nothing, verbosity - 1)
+            fitresult, cache, report =
+                fit(UnivariateStandardizer(), verbosity-1, collect(X[j]))
             fitresults[:,j] = [fitresult...]
             verbosity < 1 ||
                 @info "  :$(features[j])    mu=$(fitresults[1,j])  sigma=$(fitresults[2,j])"
         else
-            fitresults[:,j] = Float64[0.0, 0.0]
+            fitresults[:,j] = Float64[0.0, 1.0]
         end
     end
     
-    fitresult = StandardizerEstimator(fitresults, features, is_transformed)
-    state = fitresult
+    fitresult = StandardizerFitResult(fitresults, features, is_transformed)
+    cache = nothing
     report = Dict{Symbol,Any}()
     report[:features_transformed]=[features[is_transformed]]
     
-    return fitresult, state, report
+    return fitresult, cache, report
     
 end
 
