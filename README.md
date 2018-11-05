@@ -13,9 +13,19 @@ At the package manager prompt:
 
 ````
 
+### Testing
+
+````julia
+(v0.7) pkg> test MLJ
+
+```
+
+
 ### Usage
 
 ````julia
 julia> using MLJ
 
 ````
+
+
