@@ -1,7 +1,9 @@
-# Guide for adding new models to MLJ 
+# A guide for adding new models to MLJ
+
+> Really just a proposal at this stage
 
 This guide outlines the specification for the lowest level of the MLJ
-application interface. It is is guide for those adding new models by
+application interface. It is is guide for those adding new models by:
 (i) writing glue code for lazily loaded external packages (the main
 case); and (ii) writing code that is directly included in MLJ in the
 form of an include file.
@@ -11,53 +13,68 @@ adding supervised learner models from external packages is at
 ["src/interfaces/DecisionTree.jl"](../src/interfaces/DecisionTree.jl)
 
 
-## Preliminaries
+<!-- ### MLJ types -->
+
+<!-- Every type introduced the core MLJ package should be a subtype of: -->
+
+<!-- ``` -->
+<!-- abstract type MLJType end -->
+<!-- ``` -->
+
+<!-- The Julia `show` method is informatively overloaded for this -->
+<!-- type. Variable bindings declared with `@constant` "register" the -->
+<!-- binding, which is reflected in the output of `show`. -->
 
 
-### MLJ types
-
-Every type introduced the core MLJ package should be a subtype of:
-
-```
-abstract type MLJType end
-```
-
-The Julia `show` method is informatively overloaded for this
-type. Variable bindings declared with `@constant` "register" the
-binding, which is reflected in the output of `show`.
-
-
-### Models
+## Models
 
 A *model* is an object storing hyperparameters associated with some
 machine learning algorithm, where "learning algorithm" is to be
-broadly interpreted.  The name of the Julia type associated with a
-model indicates the associated algorithm (e.g.,
-`DecisionTreeClassifier`). The ultimate supertype of all models is:
+broadly interpreted.  In MLJ, hyperparameters include configuration
+parameters, like the number of threads, which may not affect the final
+learning outcome. (However,the logging level, `verbosity`, is
+excluded). 
+
+The name of the Julia type associated with a model indicates the
+associated algorithm (e.g., `DecisionTreeClassifier`). The ultimate
+supertype of all models is:
 
 ````julia
 abstract type Model <: MLJType end 
 ````
 
-Informally, we divide learning algorithms into those intended for
-making "predictions", called *learners* (e.g., the CART decision tree
-algorithm) and those intended for "transforming" data (based on
-previously seen data), called *transformers* (e.g., the PCA
-feature-reduction algorithm).  Generally, only transformers convert
-data in two directions (can *inverse* transform) and only supervised
-learners have more input variables for training than for prediction
-(but the distinction might otherwise be vague). We use the same words,
-*learner* and *transformer*, for the *models* associated with these
-algorithms.
+We use the words "learner" and "transformer" both informally to refer
+to algorithms, and to refer to associated models in the above sense.
+
+<!-- Informally, we divide basic learning algorithms into those intended -->
+<!-- for making "predictions", called *learners* (e.g., the CART decision -->
+<!-- tree algorithm) and those intended for "transforming" data (based on -->
+<!-- previously seen data), called *transformers* (e.g., the PCA -->
+<!-- feature-reduction algorithm).  Generally, only transformers convert -->
+<!-- data in two directions (can *inverse* transform) and only supervised -->
+<!-- learners have more input variables for training than for prediction -->
+<!-- (but the distinction might otherwise be vague). We use the same words, -->
+<!-- *learner* and *transformer*, for the *models* associated with these -->
+<!-- algorithms. -->
+
+<!-- In addition to basic learning algorithms are "meta-algorithms" like -->
+<!-- cross-validation and hyperparameter tuning, which have hyperparameters -->
+<!-- like any other learning algorithm (e.g., number of folds for -->
+<!-- cross-validation) and so have associated models. In place of methods -->
+<!-- (functions) like "predict" or "transform" will be methods like "tune" -->
+<!-- or "score". -->
 
 By a *fit-result* we shall mean an object storing the "weights" or
 "paramaters" learned by an algorithm using the hyperparameters
-specified by a model (i.e., what a learner needs to predict or what a
+specified by a model (e.g., what a learner needs to predict or what a
 transformer needs to transform). There is no abstract type for
 fit-results because these types are generally declared in external
-packages. However, in MLJ superivised learners are parametrized by their
-fit-result type `R`, for efficient implementation of large
+packages. However, in MLJ superivised learners are parametrized by
+their fit-result type `R`, for efficient implementation of large
 ensembles of learners of uniform type.
+
+At present a new model should be declared as a subtype of a leaf in
+the following abstract model heirachy:
 
 ````julia
 abstract type Learner <: Model end
@@ -70,28 +87,24 @@ abstract type Learner <: Model end
 abstract type Transformer <: Model end 
 ````
 
-Presently, every concrete model type in MLJ must be an immediate
-subtype of `Regressor{R}`, `Classifier{R}`, `Unsupervised` or
-`Transformer`. 
-
-> Later we may introduce other types for composite "learners" that do
-> things not fitting within the existing framework.
+> Later we may introduce other types for composite learning networks
+> (composite types), resampling and tuning
 
 ## Package interfaces (glue code)
 
 Note: Most of the following remarks also apply to built-in learning
 algorithms (i.e., not defined in external packages) and presently
 located in "src/builtins/". In particular "src/transforms.jl" will
-contain a number of common preprocessing transformations, both "static" and
-learned. External package interfaces go in "src/interfaces/"
+contain a number of common preprocessing transformations. External
+package interfaces go in "src/interfaces/".
 
 Every package interface should live inside a submodule for namespace
-hygene (see the template at
+hygiene (see the template at
 "src/interfaces/DecisionTree.jl"). Ideally, package interfaces should
-export no `struct`s outside of the model types they define, and import
-only abstract types. All "structural" design should be restricted to
-the MLJ core to prevent rewriting glue code if (when!) we change our
-design.
+export no `struct` outside of the new model types they define, and
+import only abstract types. All "structural" design should be
+restricted to the MLJ core to prevent rewriting glue code when there
+are design changes.
 
 ### New model type declarations
 
@@ -112,8 +125,7 @@ end
 Models (which are mutable) should never have internally defined
 constructors but should always be given an external lazy keyword
 constructor of the same name that defines default values and checks
-their validity by calling an optional clean! method (which has a
-trivial fall-back). 
+their validity, by calling an optional `clean!` method (see below).
 
 
 ### Supervised models
@@ -126,80 +138,39 @@ package interfaces, together with model declerations.
 #### Compulsory methods
 
 ````julia
-result::R, state, report = 
-    fit(learner::ConcreteModel, X, y, state, verbosity::Int; kwargs...)
+fitresult, cache, report =  fit(learner::ConcreteModel, verbosity::Int, X, y)
 ````
 
-Here `result` is the fit-result. Also returned is the `state`, which
-means information sufficient to perform (on passing `state` as an
-argument in a subsequent call to `fit`) any implemented functions
-*specific to the learner type*, beyond normal training. This could be,
-for example, pruning an existing decision tree, or optimizing weights
-of an ensemble learner. In particular, in the case of iterative
-learners, `state` must be sufficient to restart the training algorithm
-(eg, add decision trees to a random forest). **Important:** Instructions to perform
-special training functions must be passed as `kwargs`, which are their
-exclusive purpose. Any other "instructions" (e.g., train using 5 threads)
-must be conveyed by the hyperparameter values (fields of `learner`).
-
-> By passing instructions to fit in this way avoids having to
-> explicitly export package-specific methods to higher levels of the
-> interface. It is easy to pass kwargs given to a higher level fit
-> method down into the lower level method without the higher level
-> needing to know anything about them.
-
-**Iterative algorithims.** To enhance functionality at higher levels of the interface, the
-`kwargs` instruction for adding `n` iterations to an iterative method
-must be `add=n`.
-
-Note that `fit` must accept `nothing` as a valid input `state` but
-should never *return* `nothing` as `state` output. For the majority of
-supervised learners, the fit-result serves well enough as the output
-`state`.
-
-The Julia type of `state` is not presently restricted.
-
-Another possible use case for special fit instructions is the
-composite learner. For example, we may want to retrain a composite of
-an ordinary learner with a scaling transformer without refitting the
-scaling when tuning the ordinary learner's hyperparameters. This
-requires that the previous state of the composite be passed in to the
-composite's fit method.
-
-> One issue here is whether passing fit with special instructions
-> might have unpredictable consequences if *new* data is also passed.
-
-Any training-related statistics (e.g., internal estimate of the
-generalization error, feature importances), as well as the results of
-learner-specific functionality requested by `kwargs`, should be
-returned in the `report` object, which is either a `Dict{Symbol,Any}`
-object, or `nothing` if there is nothing to report. So for example,
-`fit` might declare `report[:feature_importances]=...`.  Reports get
-merged with those generated by previous calls to `fit` at higher
-levels of the MLJ interface.
+Here `fitresult::R` is the fit-result in the sense above. Any
+training-related statistics, such as internal estimates of the
+generalization error, and feature rankings (controlled by model
+hyperparameters) should be returned in the `report` object. This is
+either a `Dict{Symbol,Any}` object, or `nothing` if there is nothing
+to report. So for example, `fit` might declare
+`report[:feature_importances]=...`.  Reports get merged with those
+generated by previous calls to `fit` at higher levels of the MLJ
+interface. The value of `cache` can be `nothing` unless one is also
+defining a `fit2` method (see below). The Julia type of `cache` is not
+presently restricted.
 
 The types of the training data `X` and `y` should be whatever is
 required by the package for the training algorithm and declared in the
-`fit` type signature and documentation for safety.  Checks not
-specific to the package (e.g., dimension matching checks) should be
-left to higher levels of the interface to avoid code duplication.
+`fit` type signature for safety.  Checks not specific to the package
+(e.g., dimension matching checks) should be left to higher levels of
+the interface to avoid code duplication.
 
-**Hyperparameter checks.** The method `fit` should initially call
-`clean!` on `learner` and issue the returned warning if changes are
-made (i.e., the message is non-empty). See the template for an
-example. **This is the only time `fit` should alter hyperparameter
-values.** If the package is able to suggest better hyperparameters, as
-part of training, return these in the report field. 
+The method `fit` should initially call `clean!` on `learner` and issue
+the returned warning indicating the changes to `learner`. The `clean!`
+method has a trivial fall-back (which needs to be imported from MLJ)
+but can be extended (see below, and the template). This is the only
+time `fit` should alter hyperparameter values. If the package is able
+to suggest better hyperparameters, as a biproduct of training, return
+these in the report field.
 
 The `verbosity` level (0 for silent) is for passing to the fit method
-of the external package. Package interfaces should generally avoid any
-logging to avoid duplication at higher levels of the interface.
-
-**Mutation of `fit` arguments.** The fit method should not alter any
-of its arguments with the exception of `state` (which would be
-discarded by a higher-level calling function in favour of the new
-state). A normal `fit` call (i.e., default `kwargs`) should not make
-use of `state`. 
+of the external package. The `fit` method should generally avoid doing
+its own logging to avoid duplication at higher levels of the
+interface.
 
 > Presently, MLJ has a thin wrapper for fit-results called `ModelFit`
 > and the output of `fit` in package interfaces is of this type. I
@@ -209,10 +180,10 @@ use of `state`.
 > possible from core.
 
 ````julia
-prediction = predict(learner::ConcreteModel, result, Xnew)
+prediction = predict(learner::ConcreteModel, fitresult, Xnew)
 ````
 
-Here `Xnew` should be the same type as `X` in the `fit` method. (So to
+Here `Xnew` is understood to be of the same type as `X` in the `fit` method. (So to
 get a prediction on a single pattern, a user may need to suitably wrap
 the pattern before passing to `predict` - as a single-row `DataFrame`,
 for example - and suitably unwrap `prediction`, which must have the
@@ -222,7 +193,11 @@ same type as `y` in the `fit` method.)
 
 A learner of `Classifier` type can implement a `predict_proba` method
 to predict probabilities instead of labels, and will have the same
-type signature as `predict` for its inputs.
+type signature as `predict` for its inputs. 
+
+> I guess the `fit` method for a multi-class classifier will need to
+> declare an order for the classes in its `fit_result` method, to be
+> available to `predict` which calls `predict_proba` first.
 
 ````julia
 message::String = clean!(learner::Supervised)
@@ -231,6 +206,43 @@ message::String = clean!(learner::Supervised)
 Checks and corrects for invalid fields (hyperparameters), returning a
 warning `messsage`. Should only throw an exception as a last resort.
 
+````julia
+fitresult, cache, report = 
+    fit2(learner::ConcreteModel, verbosity, fitresult, cache, X, y; kwargs...) 
+````
+
+If the package interface author overloads the `fit2` method, then the
+user will be able to use MLJ to:
+
+(1) Request post-train, package-specific functionality, such as pruning
+an existing decision tree, or optimizing weights of an ensemble
+learner.
+
+(2) In the case of iterative learners, add training iterations (e.g.,
+add trees to a random forest).
+
+(3) Retrain with new hyperparameter values, without repeating certain
+computations that are redundant.
+
+In the event that the argument `fitresult` (returned by a preceding
+call to `fit`) is not sufficient for the implementation of one or more of
+these tasks in `fit2`, the author can arrange for `fit` to output in its
+`cache` return value any additional information required, as this is
+also passed as an argument to the `fit2` method.
+
+The caller of `fit2` requests package-specific functionality by
+providing appropriate `kwargs`, such as `prune_only=true`. The caller
+requests `n` additional iterations of an iterative learner, by
+specifying `add=n`. If no `kwargs` are specified, then option (3) is
+the understood instruction. (Note that `kwargs` should not be used for any
+other purpose.)
+
+> By passing instructions to fit2 in this way avoids having to
+> explicitly export package-specific methods to higher levels of the
+> interface. It is easy to pass kwargs given to a higher level fit
+> method down into the lower level method without the higher level
+> needing to know anything about them.
+
 **Iterative methods.** Iterative methods which can restart training by
 giving `fit` the keyword instruction `add=n` should also declare
 
@@ -238,20 +250,18 @@ giving `fit` the keyword instruction `add=n` should also declare
 isiterative(learner::ConcreteModel) = true
 ````
 
-to enable the enhanced iterative method functionality at higher levels
-of the interface.
-
 ##  Checklist for new adding models 
 
-At present the checklist is just for supervised learner models in
+At present the following checklist is just for supervised learner models in
 lazily loaded external packages.
 
-1. Copy and edit file ["src/DecisionTree.jl"](../src/DecisionTree.jl)
+- Copy and edit file
+["src/interfaces/DecisionTree.jl"](../src/interfaces/DecisionTree.jl)
 which is annotated for use as a template. Give your new file a name
 identical to the package name, including ".jl" extension, such as
 "DecisionTree.jl". Put this file in "src/interfaces/".
 
-2. Register your package for lazy loading with MLJ by finding out the
+- Register your package for lazy loading with MLJ by finding out the
 UUID of the package and adding an appropriate line to the `__init__`
 method at the end of "src/MLJ.jl". It will look something like this:
 
@@ -263,23 +273,23 @@ end
 ````
 
 With `lazy=true`, your glue code only gets loaded by the MLJ user
-after they run 'import NewExternalPackage'. For testing in your local
+after they run `import NewExternalPackage`. For testing in your local
 MLJ fork, you may want to set `lazy=false` but to use `Revise` you
 will also need to move the `@load_interface` line out outside of the
 `__init__` function. 
 
-3. Write self-contained test-code for the methods defined in your glue
-code, in a file with an identical name, but placed in "test/", eg,
-["test/DecisionTree.jl"](../test/DecisionTree.jl) for an example. This
+- Write self-contained test-code for the methods defined in your glue
+code, in a file with an identical name, but placed in "test/" (as in
+["test/DecisionTree.jl"](../test/DecisionTree.jl)). This
 code should be wrapped in a module to prevent namespace conflicts with
 other test code. For a module name, just prepend "Test", as in
 "TestDecisionTree". See "test/DecisionTree.jl" for an example. 
 
-4. Add a line to ["test/runtests.jl"](../test/runtests.jl) to
+- Add a line to ["test/runtests.jl"](../test/runtests.jl) to
 `include` your test file, for the purpose of testing MLJ core and all
 currently supported packages, including yours. You can Test your code
 by running `test MLJ` from the Julia interactive package manager. You
-will need to `dev` your local MLJ fork first. To test your code in
+will need to `Pkg.dev` your local MLJ fork first. To test your code in
 isolation, locally edit "test/runtest.jl" appropriately.
 
-4. Make a pull-request to include your working inteface!
+
