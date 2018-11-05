@@ -1,3 +1,4 @@
+using Revise
 using MLJ
 
 X, y = datanow(); # ALL of the data, training, test and validation
@@ -26,10 +27,10 @@ knn = Trainable(knn_, Xa, y)
 fit!(knn, fold1)
 
 # get the predictions on the other fold:
-yhat = predict(knn, Xa(fold2));
+yhat = predict(knn, Xa[Rows, fold2]);
 
 # compute the error:
-er1 = rms(y(fold2), yhat)
+er1 = rms(y[Rows, fold2], yhat)
 
 # then repeat all of the above with roles of `fold1` and `fold2`
 # interchanged to get `er2`.
@@ -69,10 +70,10 @@ er = rms(y, yhat)
 # Now `er` is dynamic, so we can do "look through training" on any rows
 # we like and evaluate on any rows:
 fit!(er, fold1)
-er1 = er(fold2)
+er1 = er[Rows, fold2]
 
 fit!(er, fold2)
-er2 = er(fold1)
+er2 = er[Rows, fold1]
 
 er = (er1 + er2)/2
 

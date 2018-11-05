@@ -176,13 +176,13 @@ function fit(transformer::Standardizer, verbosity::Int, X::DataFrame)
 
     # fit each of those features
     fitresults = Array{Float64}(undef, 2, size(X, 2))
-    verbosity < 1 || @info "Features standarized: "
+    verbosity < 2 || @info "Features standarized: "
     for j in 1:size(X, 2)
         if is_transformed[j]
             fitresult, cache, report =
                 fit(UnivariateStandardizer(), verbosity-1, collect(X[j]))
             fitresults[:,j] = [fitresult...]
-            verbosity < 1 ||
+            verbosity < 2 ||
                 @info "  :$(features[j])    mu=$(fitresults[1,j])  sigma=$(fitresults[2,j])"
         else
             fitresults[:,j] = Float64[0.0, 1.0]
