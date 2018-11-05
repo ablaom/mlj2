@@ -1,8 +1,5 @@
 ## CONSTANTS
 
-const COLUMN_WIDTH = 24           # for displaying dictionaries with `show`
-const DEFAULT_SHOW_DEPTH = 2      # how deep to display fields of `MLJType` objects
-
 
 ## REGISTERING LABELS OF OBJECTS DURING ASSIGNMENT
 

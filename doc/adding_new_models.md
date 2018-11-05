@@ -1,6 +1,6 @@
-# A guide for adding new models to MLJ
+# Adding new models to MLJ
 
-> Really just a proposal at this stage
+> At present, more in the nature of a proposal
 
 This guide outlines the specification for the lowest level of the MLJ
 application interface. It is is guide for those adding new models by:
@@ -69,9 +69,9 @@ By a *fit-result* we shall mean an object storing the "weights" or
 specified by a model (e.g., what a learner needs to predict or what a
 transformer needs to transform). There is no abstract type for
 fit-results because these types are generally declared in external
-packages. However, in MLJ superivised learners are parametrized by
-their fit-result type `R`, for efficient implementation of large
-ensembles of learners of uniform type.
+packages. However, in MLJ the abstact supervised model type is
+parametrized by the fit-result type `R`, for efficient
+implementation of large ensembles of learners of uniform type.
 
 At present a new model should be declared as a subtype of a leaf in
 the following abstract model heirachy:

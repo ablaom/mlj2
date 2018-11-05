@@ -39,131 +39,17 @@ using Statistics
 using LinearAlgebra
 
 
-# CONSTANTS
+## CONSTANTS
 
 const srcdir = dirname(@__FILE__) # the directory containing this file 
 const TREE_INDENT = 2 # indentation for tree-based display of dynamic data 
-
-## GLOSSARY
-
-# A bare-bones definition of terms for the Julia-illiterate, light on
-# implementation details:
-
-"""
-### task (object of type `Task`)
-
-Data plus a clearly specified learning objective. In addition, a
-description of how the completed task is to be evaluated.
+const COLUMN_WIDTH = 24           # for displaying dictionaries with `show`
+const DEFAULT_SHOW_DEPTH = 2      # how deep to display fields of `MLJType` objects
 
 
-### hyperparameters
-
-Parameters on which some learning algorithm depends, specified before
-the algorithm is applied, and where learning is interpreted in the
-broadest sense. For example, PCA feature reduction is a
-"preprocessing" transformation "learning" a projection from training
-data, governed by a dimension hyperparameter. Hyperparameters in our
-sense may specify configuration (eg, number of parallel processes)
-even when this does not effect the end-product of learning. (We do
-exclude logging configuration parameters, eg verbosity level.)
-
-
-### model (object of abstract type `Model`)
-
-Object collecting together hyperameters of a single algorithm. 
-
-
-### learner (object of abstract type `Learner`)
-
-Informally, any learning algorithm. More technically, a model
-associated with such an algorithm.
-
-
-### transformer (object of abstract type `Transformer`)
-
-Informally, anything that transforms data or an algorithm that
-"learns" such transforms from training data (eg, feature reduction,
-normalization). Or, more technically, the model associated with
-such an algorithm.
-
-
-### fitresult 
-
-The "weights" or "paramaters" learned by an algorithm using the
-hyperparameters prescribed in an associated model (eg, what a learner
-needs to predict or what a transformer needs to transform). 
-
-
-### method
-
-What Julia calls a function. (In Julia, a "function" is a collection
-of methods sharing the same name but different type signatures.)
-
-
-### operator
-
-Data-manipulating operations (methods) parameterized by some
-fitresult. For learners, the `predict` or `predict_proba` methods, for
-transformers, the `transform` or `inverse_transform` method. In some
-contexts such an operator might be replaced by an ordinary operator
-(methods) that do *not* depend on an fitresult, which are then then
-called *static* operators for clarity. An operator that is not static
-is *dynamic*.
-
-
-### state (type not presently constrained)
-
-A product of training that is sufficient to perform any implemented
-learner/transformer-specific functions beyond normal training (eg,
-pruning an existing decision tree, optimization weights of an ensemble
-learner). In particular, in the case of iterative learners, state must
-be sufficient to restart the training algorithm (eg, add decision
-trees to a random forest). The fitresult may serve as state and should
-do so by default.
-
-
-### trainable model
-
-An object consisting of a model wrapped with an fitresult, cache,
-*and* a source for training data. A *source* is either concrete data
-(eg, data frame) or *dynamic data*, as defined below. The fitresult
-and cache are undefined until the model is trained.
-
-A trainable model might also include metadata recording algorithm-specific
-statistics of training (eg, internal estimate of generalization error)
-or the results of calling the `fit` method with special instructions
-(eg, `calculate_feature_importance=true`).
-
-
-### dynamic data
-
-A "trainable" data-like object consisting of:
-
-(1) An **operator**, static or dynamic.
-
-(2) A **trainable model**, void if the operator is static.
-
-(3) Connections to other dynamic or static data, specified by a list
-   of **arguments** (one for each argument of the operator); each
-   argument is data, dynamic or static.
-
-(4) An **activity flag** used to switch dynamic behaviour on or off.
-
-(5) Metadata tracking the object's dependency on various fitresults,
-    as implied by its connections.
-
-
-### learning network (implicity defined by dynamic data)
-
-A directed graph implicit in the specification of dynamic data. All
-nodes are dynamic data except for the source nodes, which are
-static. Something like a scikit-learn pipeline.
-
-"""
-glossary() = nothing
+## GENERAL PURPOSE UTILITIES
 
 include("utilities.jl")
-
 
 
 ## ABSTRACT TYPES
@@ -184,7 +70,7 @@ abstract type Learner <: Model end
 abstract type Transformer <: Model end 
 
 # special learners:
-abstract type Supervised{E} <: Learner end # parameterized by fitresult `E`
+abstract type Supervised{E} <: Learner end # parameterized by fit-result `E`
 abstract type Unsupervised{E} <: Learner end
 
 # special supervised learners:
@@ -373,10 +259,18 @@ X_and_y(task::SupervisedTask) = (task.data[Cols, features(task)],
 include("datasets.jl")
 
 
-## PACKAGE INTERFACE METHODS 
+## LOW-LEVEL MODEL METHODS 
 
-# to be extended by interfaces:
+# Most concrete model types, and their associated low-level methods,
+# are defined in package interfaces, located in
+# "/src/interfaces.jl". These are are lazily loaded (see the end of
+# this file). Built-in model definitions and associated methods (ie,
+# ones not dependent on external packages) are contained in
+# "/src/builtins.jl"
+
+# low-level methods to be extended:
 function fit end
+function fit2 end
 function predict end
 function predict_proba end
 function transform end 
@@ -390,16 +284,8 @@ clean!(fitresult::Model) = ""
 fit2(model::Model, verbosity, fitresult, cache, args...) =
     fit(model, verbosity, args...)
 
-# note: package interfaces define concrete `Model` types, the
-# users' "basement level" abstractions.
 
-# note: package interfaces are contained in "/src/interfaces.jl" and
-# lazy loaded. built-in model definitions and associated methods (ie,
-# ones not dependent on external packages) are contained in
-# "/src/builtins.jl"
-
-
-## MODEL INTERFACE - BARE BONES
+## TRAINABLE MODEL INTERFACE - BARE BONES
 
 """ 
     merge!(tape1, tape2)
