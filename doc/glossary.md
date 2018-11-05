@@ -103,7 +103,7 @@ models, and the dependecies on other trainable models implied by its
 arguments.
 
 The "data-like" behaviour of dynamic data is implemented by
-overloading Julia's indexing methods and is explained [here (or will be)]().
+overloading Julia's indexing methods and is sketched [here](dynamic_data.md).
 
 
 ### learning network (implicity defined by dynamic data)
