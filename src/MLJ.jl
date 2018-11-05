@@ -182,8 +182,8 @@ end
 ## UNIVERSAL ADAPTOR FOR DATA CONTAINERS
 
 # For vectors and tabular data containers `df`:
-# `df[Rows, r]` gets rows of `df` at `r` (single integer, range or colon)
-# `df[Cols, c]` selects features of df at `c` (single integer, range or colon); not supported for vectors
+# `df[Rows, r]` gets rows of `df` at `r` (single integer, integer range, or colon)
+# `df[Cols, c]` selects features of df at `c` (single integer or symbol, vector of symbols, integer range or colon); not supported for vectors
 # `df[Names]` returns names of all features of `df` (or indices if unsupported)
 
 
