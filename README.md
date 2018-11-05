@@ -28,4 +28,6 @@ julia> using MLJ
 
 ````
 
+And try running the script in ["doc/dynamic.jl"](doc/dynamic.jl)
+
 
