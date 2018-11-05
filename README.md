@@ -18,7 +18,7 @@ At the package manager prompt:
 ````julia
 (v0.7) pkg> test MLJ
 
-```
+````
 
 
 ### Usage
