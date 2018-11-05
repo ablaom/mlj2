@@ -255,6 +255,9 @@ isiterative(learner::ConcreteModel) = true
 At present the following checklist is just for supervised learner models in
 lazily loaded external packages.
 
+> This checklist does not apply yet. It supposes we have made certain
+> organizational changes to MLJ not yet discussed.
+
 - Copy and edit file
 ["src/interfaces/DecisionTree.jl"](../src/interfaces/DecisionTree.jl)
 which is annotated for use as a template. Give your new file a name
