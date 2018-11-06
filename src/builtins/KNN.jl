@@ -58,6 +58,8 @@ fit2(model, verbosity, fitresult, cache, X, y) = fitresult, cache, nothing
 
 first_component_is_less_than(v, w) = isless(v[1], w[1])
 
+# TODO: there is way smarter way to do without sorting. Alternatively,
+# get a KNN solver from external package.
 function distances_and_indices_of_closest(K, metric, Xtrain, pattern)
 
     distance_index_pairs = Array{Tuple{Float64,Int}}(undef, size(Xtrain, 2))
