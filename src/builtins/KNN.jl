@@ -18,7 +18,7 @@ KNNFitResultType = Tuple{Matrix{Float64},Vector{Float64}, Dates.DateTime}
 mutable struct KNNRegressor <: Regressor{KNNFitResultType}
     K::Int           # number of local target values averaged
     metric::Function
-    kernel::Function # each target value is weighted by `kernel(distance^2)`
+    kernel::Function 
 end
 
 euclidean(v1, v2) = norm(v2 - v1)
