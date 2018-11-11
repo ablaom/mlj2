@@ -327,7 +327,7 @@ mutable struct TrainableModel{B<:Model} <: MLJType
         # note: `get_tape(arg)` returns arg.tape where this makes
         # sense and an empty tape otherwise.  However, the complete
         # definition of `get_tape` must be postponed until
-        # `DynamicData` type is defined.
+        # `LearningNode` type is defined.
 
         # combine the tapes of all arguments to make a new tape:
         tape = get_tape(nothing) # returns blank tape 
@@ -424,7 +424,7 @@ end
 
 ## DYNAMIC DATA INTERFACE - BASICS
 
-struct DynamicData{M<:Union{TrainableModel, Nothing}} <: MLJType
+struct LearningNode{M<:Union{TrainableModel, Nothing}} <: MLJType
 
     operator::Function              # eg, `predict` or `inverse_transform` or a static operator
     trainable::M                        # is `nothing` for static operators
@@ -432,7 +432,7 @@ struct DynamicData{M<:Union{TrainableModel, Nothing}} <: MLJType
     tape::Vector{TrainableModel}    # for tracking dependencies
     depth::Int64       
 
-    function DynamicData{M}(operator, trainable::M, args...) where M<:Union{TrainableModel, Nothing}
+    function LearningNode{M}(operator, trainable::M, args...) where M<:Union{TrainableModel, Nothing}
 
         # get the trainable model's dependencies:
         tape = copy(get_tape(trainable))
@@ -456,42 +456,42 @@ end
 
 # ... where
 get_depth(::Any) = 0
-get_depth(X::DynamicData) = X.depth
+get_depth(X::LearningNode) = X.depth
 
-# to complete the definition of `TrainableModel` and `DynamicData`
+# to complete the definition of `TrainableModel` and `LearningNode`
 # constructors:
 get_tape(::Any) = TrainableModel[]
-get_tape(X::DynamicData) = X.tape
+get_tape(X::LearningNode) = X.tape
 get_tape(trainable::TrainableModel) = trainable.tape
 
 # autodetect type parameter:
-DynamicData(operator, trainable::M, args...) where M<:Union{TrainableModel, Nothing} =
-    DynamicData{M}(operator, trainable, args...)
+LearningNode(operator, trainable::M, args...) where M<:Union{TrainableModel, Nothing} =
+    LearningNode{M}(operator, trainable, args...)
 
 # user's fall-back constructor:
-dynamic(operator::Function, trainable::TrainableModel, args...) = DynamicData(operator, trainable, args...)
+dynamic(operator::Function, trainable::TrainableModel, args...) = LearningNode(operator, trainable, args...)
 
 # user's constructor for learners and transformers:
 LT = Union{Learner,Transformer}
 function dynamic(operator::Function, trainable::TrainableModel{M}, args...) where M<:LT
     length(args) == 1 || throw(error("Wrong number of arguments. "*
                                      "Use `dynamic(operator, trainable_model, X)` for learners or transfomers."))
-    return DynamicData(operator, trainable, args...)
+    return LearningNode(operator, trainable, args...)
 end
 
 # user's special constructor for static operators:
 function dynamic(operator::Function, args...)
     length(args) > 0 || throw(error("`args` in `dynamic(::Function, args...)` must be non-empty. "))
     trainable = nothing
-    return DynamicData(operator, trainable, args...)
+    return LearningNode(operator, trainable, args...)
 end
 
 # make dynamic data row-indexable:
-Base.getindex(y::DynamicData, ::Type{Rows}, r) =
+Base.getindex(y::LearningNode, ::Type{Rows}, r) =
     (y.operator)(y.trainable, [y.args[j][Rows,r] for j in eachindex(y.args)]...)
 
 # special case of static operators:
-Base.getindex(y::DynamicData{Nothing}, ::Type{Rows}, r) =
+Base.getindex(y::LearningNode{Nothing}, ::Type{Rows}, r) =
     (y.operator)([y.args[j][Rows,r] for j in eachindex(y.args)]...)
 
 # note: the following two methods only work as expected if the dynamic data `y`
@@ -499,15 +499,15 @@ Base.getindex(y::DynamicData{Nothing}, ::Type{Rows}, r) =
 
 # calling `y[Echo, Xnew]` gets "value" of `y` as if ultimate source of
 # `y` (as learning network) is replaced with `Xnew`:
-Base.getindex(y::DynamicData, ::Type{Echo}, Xnew) =
+Base.getindex(y::LearningNode, ::Type{Echo}, Xnew) =
     (y.operator)(y.trainable, [y.args[j][Echo,Xnew] for j in eachindex(y.args)]...)
 
 # specializing to static operators:
-Base.getindex(y::DynamicData{Nothing}, ::Type{Echo}, Xnew) =
+Base.getindex(y::LearningNode{Nothing}, ::Type{Echo}, Xnew) =
     (y.operator)([y.args[j][Echo,Xnew] for j in eachindex(y.args)]...)
 
 # the "fit through" method:
-function fit!(y::DynamicData, rows; verbosity=1, kwargs...)
+function fit!(y::LearningNode, rows; verbosity=1, kwargs...)
     for trainable in y.tape[1:end-1]
         fit!(trainable, rows; verbosity=verbosity)
     end
@@ -523,9 +523,9 @@ function spaces(n)
     end
     return s
 end
-function Base.show(stream::IO, ::MIME"text/plain", X::DynamicData)
+function Base.show(stream::IO, ::MIME"text/plain", X::LearningNode)
     gap = spaces(20 - TREE_INDENT*get_depth(X) + TREE_INDENT)
-    if X.operator == identity && !(X.args[1] isa DynamicData) 
+    if X.operator == identity && !(X.args[1] isa LearningNode) 
         print(stream, gap, handle(X))#.args[1]))
     else
         detail = (X.trainable == nothing ? "(" : "($(handle(X.trainable)),")
@@ -535,7 +535,7 @@ function Base.show(stream::IO, ::MIME"text/plain", X::DynamicData)
         n_args = length(X.args)
         counter = 1
         for arg in X.args
-            if arg isa DynamicData
+            if arg isa LearningNode
                 show(stream, MIME("text/plain"), arg)
             else
                 # id = objectid(arg)
@@ -558,39 +558,39 @@ end
 ## SYNTACTIC SUGAR FOR DYNAMIC DATA
     
 dynamic(X) = dynamic(identity, X)
-dynamic(X::DynamicData) = X
+dynamic(X::LearningNode) = X
 
 # make dynamic data callable on unseen source data:
-(y::DynamicData)(Xnew) = y[Echo, Xnew]
+(y::LearningNode)(Xnew) = y[Echo, Xnew]
 
 # TODO: write method `source` that locates ultimate source of a dynamic
 # data's input data
 
 # remove need for `dynamic` syntax in case of operators of main interest:
-predict(trainable::TrainableModel{L}, X::DynamicData) where L<:Learner =
+predict(trainable::TrainableModel{L}, X::LearningNode) where L<:Learner =
     dynamic(predict, trainable, X)
-transform(trainable::TrainableModel{T}, X::DynamicData) where T<:Transformer =
+transform(trainable::TrainableModel{T}, X::LearningNode) where T<:Transformer =
     dynamic(transform, trainable, X)
-inverse_transform(trainable::TrainableModel{T}, X::DynamicData) where T<:Transformer =
+inverse_transform(trainable::TrainableModel{T}, X::LearningNode) where T<:Transformer =
     dynamic(inverse_transform, trainable, X)
 
 array(X) = convert(Array, X)
-array(X::DynamicData) = dynamic(array, X)
+array(X::LearningNode) = dynamic(array, X)
 
 Base.log(v::Vector{<:Number}) = log.(v)
 Base.exp(v::Vector{<:Number}) = exp.(v)
-Base.log(X::DynamicData) = dynamic(log, X)
-Base.exp(X::DynamicData) = dynamic(exp, X)
+Base.log(X::LearningNode) = dynamic(log, X)
+Base.exp(X::LearningNode) = dynamic(exp, X)
 
 
-rms(y::DynamicData, yhat::DynamicData) = dynamic(rms, y, yhat)
-rms(y, yhat::DynamicData) = dynamic(rms, y, yhat)
-rms(y::DynamicData, yhat) = dynamic(rms, y, yhat)
+rms(y::LearningNode, yhat::LearningNode) = dynamic(rms, y, yhat)
+rms(y, yhat::LearningNode) = dynamic(rms, y, yhat)
+rms(y::LearningNode, yhat) = dynamic(rms, y, yhat)
 
 import Base.+
-+(y1::DynamicData, y2::DynamicData) = dynamic(+, y1, y2)
-+(y1, y2::DynamicData) = dynamic(+, y1, y2)
-+(y1::DynamicData, y2) = dynamic(+, y1, y2)
++(y1::LearningNode, y2::LearningNode) = dynamic(+, y1, y2)
++(y1, y2::LearningNode) = dynamic(+, y1, y2)
++(y1::LearningNode, y2) = dynamic(+, y1, y2)
 
 
 ## LOAD BUILT-IN MODELS
